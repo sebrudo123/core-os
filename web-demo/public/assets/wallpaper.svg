@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="2160" viewBox="0 0 3840 2160" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Core OS default wallpaper">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="0.55" stop-color="#13203B"/>
+      <stop offset="1" stop-color="#0E2A47"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.72" cy="0.28" r="0.6">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect width="3840" height="2160" fill="url(#bg)"/>
+  <rect width="3840" height="2160" fill="url(#glow)"/>
+  <g transform="translate(1920 1080)" opacity="0.9">
+    <circle r="620" fill="none" stroke="url(#ring)" stroke-width="10" opacity="0.5"/>
+    <circle r="430" fill="none" stroke="url(#ring)" stroke-width="6" opacity="0.35"/>
+    <circle r="250" fill="url(#ring)" opacity="0.18"/>
+  </g>
+  <text x="1920" y="1120" text-anchor="middle" font-family="Ubuntu, DejaVu Sans, sans-serif" font-size="180" font-weight="700" fill="#E2E8F0" opacity="0.92">Core OS</text>
+  <text x="1920" y="1250" text-anchor="middle" font-family="Ubuntu, DejaVu Sans, sans-serif" font-size="60" fill="#38BDF8" opacity="0.85">administra · automatiza · observa</text>
+</svg>
