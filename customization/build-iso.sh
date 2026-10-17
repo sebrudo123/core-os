@@ -311,9 +311,16 @@ extract_squashfs() {
   log "Descomprimiendo $SQUASHFS_REL (puede tardar)..."
   rm -rf "$EDIT_TREE"
   mkdir -p "$EDIT_TREE"
-  unsquashfs -d "$EDIT_TREE" "$ISO_TREE/$SQUASHFS_REL" \
-    -processors "$(nproc)" -no-progress
-  ok "Sistema de archivos descomprimido"
+  # IMPORTANTE: las opciones van SIEMPRE antes de la imagen; si van después,
+  # unsquashfs las interpreta como rutas a extraer (y no extrae nada).
+  unsquashfs -processors "$(nproc)" -no-progress -d "$EDIT_TREE" \
+    "$ISO_TREE/$SQUASHFS_REL"
+
+  # Verificación de seguridad: el árbol no puede quedar vacío.
+  local top_entries
+  top_entries="$(find "$EDIT_TREE" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
+  [ "$top_entries" -gt 0 ] || die "la descompresión produjo un sistema de archivos vacío"
+  ok "Sistema de archivos descomprimido ($top_entries entradas en /)"
 }
 
 # ---------------------------------------------------------------------------
@@ -333,6 +340,7 @@ setup_chroot_mounts() {
   done
   # DNS para que apt funcione dentro del chroot
   if [ -f /etc/resolv.conf ]; then
+    mkdir -p "$EDIT_TREE/etc"
     cp -f /etc/resolv.conf "$EDIT_TREE/etc/resolv.conf"
   fi
 }
