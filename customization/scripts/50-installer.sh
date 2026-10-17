@@ -72,7 +72,13 @@ Categories=System;
 EOF
 
 # --- Desactiva el instalador de Ubuntu (Core OS usa el suyo) ---------------
+# (ubiquity, el asistente de primer arranque y el instalador nuevo 24.04)
 run rm -f /etc/xdg/autostart/ubiquity.desktop \
           /etc/xdg/autostart/gnome-initial-setup.desktop 2>/dev/null || true
+for pattern in '*provision*.desktop' '*ubiquity*.desktop' \
+               '*initial-setup*.desktop' '*installer*.desktop'; do
+  # shellcheck disable=SC2086
+  run bash -c "rm -f /etc/xdg/autostart/${pattern}" 2>/dev/null || true
+done
 
 log "50-installer.sh completado"

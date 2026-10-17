@@ -168,7 +168,7 @@ def install(opts):
         "/var/cache/apt/archives/*", "/var/lib/docker/*", "/swapfile",
         "/etc/resolv.conf",
     ]
-    cmd = ["rsync", "-aHAX", "--info=progress2", "--no-inc-recursive"]
+    cmd = ["rsync", "-aHAX", "-x", "--info=progress2", "--no-inc-recursive"]
     for e in excludes:
         cmd += ["--exclude", e]
     cmd += ["/", TARGET + "/"]

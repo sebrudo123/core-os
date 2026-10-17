@@ -105,27 +105,6 @@ jobs:
           curl -fsS -o /dev/null "http://localhost:6080/vnc.html" \
             && echo "noVNC respondiendo en local" || echo "AVISO: noVNC no responde aún"
 
-          # Captura de pantalla periódica (se sirve en <túnel>/shots/latest.png)
-          sudo mkdir -p /usr/share/novnc/shots
-          sudo chown "$USER" /usr/share/novnc/shots
-          cat > /tmp/capture.sh <<'EOS'
-          #!/usr/bin/env bash
-          i=0
-          while :; do
-            i=$((i+1))
-            printf 'screendump /tmp/shot.ppm\n' | socat - UNIX-CONNECT:/tmp/mon.sock >/dev/null 2>&1 || true
-            sleep 1
-            if [ -f /tmp/shot.ppm ]; then
-              convert /tmp/shot.ppm /usr/share/novnc/shots/latest.png 2>/dev/null || true
-              cp -f /usr/share/novnc/shots/latest.png "/usr/share/novnc/shots/shot-$(printf '%03d' $i).png" 2>/dev/null || true
-              rm -f /tmp/shot.ppm
-            fi
-            sleep 4
-          done
-          EOS
-          chmod +x /tmp/capture.sh
-          nohup /tmp/capture.sh > /tmp/capture.log 2>&1 &
-
           # cloudflared: túnel HTTPS público (soporta WebSocket)
           curl -fsSL -o /tmp/cloudflared.deb \
             https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
@@ -174,16 +153,36 @@ jobs:
             tunnel-url.txt
           retention-days: 1
 
-      - name: Mantener la sesión en vivo
+      - name: Sesión en vivo (capturas periódicas + keep-alive)
         run: |
-          echo "Sesión en vivo activa. Se cerrará en ${{ github.event.inputs.minutes }} min."
-          for _ in $(seq 1 "${{ github.event.inputs.minutes }}"); do
+          set -uo pipefail
+          # La captura va EN PRIMER PLANO: si se lanza en segundo plano, el
+          # runner la mata al terminar el paso anterior (~50 s).
+          sudo mkdir -p /usr/share/novnc/shots
+          sudo chown "$USER" /usr/share/novnc/shots
+          MIN="${{ github.event.inputs.minutes }}"
+          END=$(( $(date +%s) + MIN * 60 ))
+          i=0
+          echo "Sesión en vivo activa durante ${MIN} min."
+          while [ "$(date +%s)" -lt "$END" ]; do
             if ! kill -0 "$(cat /tmp/qemu.pid)" 2>/dev/null; then
-              echo "La VM terminó antes de lo previsto."; tail -20 /tmp/qemu.log; exit 0
+              echo "La VM terminó antes de lo previsto."; tail -20 /tmp/qemu.log; break
             fi
-            sleep 60
+            i=$((i+1))
+            printf 'screendump /tmp/shot.ppm\n' | socat - UNIX-CONNECT:/tmp/mon.sock >/dev/null 2>&1 || true
+            sleep 1
+            if [ -f /tmp/shot.ppm ]; then
+              convert /tmp/shot.ppm /usr/share/novnc/shots/latest.png 2>/dev/null || true
+              # Guarda una captura numerada cada minuto (~4 iteraciones).
+              if [ $((i % 4)) -eq 0 ]; then
+                cp -f /usr/share/novnc/shots/latest.png \
+                  "/usr/share/novnc/shots/shot-$(printf '%03d' "$i").png" 2>/dev/null || true
+              fi
+              rm -f /tmp/shot.ppm
+            fi
+            sleep 14
           done
-          echo "Tiempo completado; cerrando."
+          echo "Sesión finalizada ($i capturas)."
 
       - name: Registro final (por si algo falló)
         if: always()

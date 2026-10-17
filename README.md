@@ -35,7 +35,7 @@ Core OS no usa el escritorio de Ubuntu tal cual: le da su propia personalidad.
 | Elemento | Qué hace Core OS |
 | --- | --- |
 | **Menú de arranque (GRUB)** | Tema propio con logo, fondo y el nombre **Core OS**. |
-| **Splash de arranque (Plymouth)** | Logo animado de Core OS durante el inicio. |
+| **Splash de arranque (Plymouth)** | Tema propio de Core OS. *(Pendiente: el splash del medio en vivo sale del `initrd`; requiere regenerarlo para aplicar el tema.)* |
 | **Inicio de sesión (GDM)** | Logo y fondo de Core OS, tema oscuro. |
 | **Escritorio** | Tema oscuro, iconos y acento de Core OS. |
 | **Barra de tareas** | Centrada, **abajo**, botón "Inicio" (menú de aplicaciones) y apps ancladas: experiencia tipo Windows 11. |
@@ -45,6 +45,50 @@ Core OS no usa el escritorio de Ubuntu tal cual: le da su propia personalidad.
 
 Los recursos gráficos (logo, fondo de GRUB, splash) se generan por código, sin
 dependencias, con `customization/branding/tools/generate-assets.mjs`.
+
+---
+
+## Instalador propio (Core OS Setup, estilo Windows 11)
+
+Al arrancar el medio de instalación, Core OS **no** muestra la pantalla de
+Ubuntu: se lanza **Core OS Setup**, un asistente a pantalla completa con la
+estética de Windows 11 que instala el sistema de verdad.
+
+| Paso | Qué hace |
+| --- | --- |
+| 1. Configuración regional | Idioma, distribución del teclado y zona horaria. |
+| 2. Instalar ahora | Pantalla de bienvenida con el logo de Core OS. |
+| 3. Disco | Lista de discos y selección del destino (se formatea). |
+| 4. Cuenta | Usuario, contraseña y nombre del equipo. |
+| 5. Instalando… | Barra de progreso, consejos y detalle técnico. |
+| 6. Fin | Reinicio a Core OS ya instalado. |
+
+Por debajo, el asistente ([`customization/setup/`](./customization/setup)) es
+una interfaz HTML/CSS/JS mostrada con WebKit2GTK y un backend Python que:
+
+1. particiona (GPT: ESP + raíz; BIOS: `bios_grub` + raíz),
+2. formatea (ext4 / FAT32) y monta,
+3. copia el sistema con `rsync`,
+4. configura `fstab`, locale, teclado, hostname y usuario,
+5. instala **GRUB** (UEFI o BIOS) y habilita los servicios.
+
+Se levanta como servicio (`core-os-setupd.service`, solo en el medio en vivo
+gracias a `ConditionKernelCommandLine=boot=casper`) y se muestra a pantalla
+completa en la sesión en vivo. En el sistema instalado **no** aparece.
+
+---
+
+## Vista previa en vivo (VNC)
+
+`live-preview.yml` arranca la **ISO real** en una VM (QEMU/KVM) en CI y la
+expone en el navegador con **noVNC** a través de un túnel público, además de
+publicar capturas de pantalla en `<url>/shots/latest.png`. Es la forma de ver
+e **interactuar** con el escritorio real sin instalar nada:
+
+```bash
+# Ejecuta el workflow "Live Preview" (o por API) e incluye el enlace noVNC
+# en la página del run (Summary) y como artefacto `live-url`.
+```
 
 ---
 
@@ -205,8 +249,11 @@ Guía paso a paso: [`docs/deploy.md`](./docs/deploy.md).
 - [x] Scripts de personalización + autoinstall
 - [x] Constructor de ISO reproducible (**verificado en CI**)
 - [x] Workflow de CI/CD (empaquetado + ISO + Release en tags)
-- [x] Identidad propia: GRUB, Plymouth, GDM y escritorio tipo Windows 11
+- [x] Identidad propia: GRUB, GDM y escritorio tipo Windows 11
+- [x] **Instalador propio (Core OS Setup, estilo Windows 11)**
 - [x] Modo Demo Web (dashboard, métricas, logs, terminal)
+- [x] Vista previa en vivo por VNC (QEMU/KVM + noVNC)
+- [ ] Splash de arranque propio (regenerar el `initrd` del medio)
 - [ ] Firma de la ISO (GPG) y verificación de arranque seguro
 - [ ] Repositorio APT propio (paquetes `core-os-*`)
 - [ ] Autenticación del panel admin (OIDC / JWT)
