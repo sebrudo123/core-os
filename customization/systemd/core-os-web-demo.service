@@ -5,7 +5,7 @@
 # ===========================================================================
 [Unit]
 Description=Core OS Web Demo (panel de administración)
-Documentation=https://github.com/core-os/core-os
+Documentation=https://github.com/sebrudo123/core-os
 After=network-online.target
 Wants=network-online.target
 

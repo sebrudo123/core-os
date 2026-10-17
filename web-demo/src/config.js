@@ -26,7 +26,7 @@ export const config = {
 
   // Integración con GitHub (historial real de builds de Actions).
   github: {
-    repo: process.env.GITHUB_REPO || 'core-os/core-os',
+    repo: process.env.GITHUB_REPO || 'sebrudo123/core-os',
     token: process.env.GITHUB_TOKEN || '',
     branch: process.env.GITHUB_BRANCH || 'main',
   },
@@ -35,7 +35,7 @@ export const config = {
     name: 'Core OS',
     release: process.env.CORE_OS_RELEASE || '1.0.0',
     base: process.env.CORE_OS_BASE || 'Ubuntu 24.04 LTS (noble)',
-    repository: process.env.CORE_OS_REPOSITORY || 'https://github.com/core-os/core-os',
+    repository: process.env.CORE_OS_REPOSITORY || 'https://github.com/sebrudo123/core-os',
   },
 
   paths: {

@@ -4,8 +4,8 @@
 > con personalización automatizada (Cubic / scripts de chroot), pipeline CI/CD
 > en GitHub Actions y un **Modo Demo Web** estilo CasaOS para administradores.
 
-[![Build ISO](https://github.com/OWNER/core-os/actions/workflows/build-iso.yml/badge.svg)](../../actions/workflows/build-iso.yml)
-[![CI](https://github.com/OWNER/core-os/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![Build ISO](https://github.com/sebrudo123/core-os/actions/workflows/build-iso.yml/badge.svg)](../../actions/workflows/build-iso.yml)
+[![CI](https://github.com/sebrudo123/core-os/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 ---

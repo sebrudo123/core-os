@@ -57,8 +57,8 @@ VERSION="${CORE_OS_RELEASE} (${UBUNTU_CODENAME})"
 VERSION_CODENAME=${UBUNTU_CODENAME}
 ID=core-os
 ID_LIKE=ubuntu debian
-HOME_URL="https://github.com/core-os"
-SUPPORT_URL="https://github.com/core-os/issues"
+HOME_URL="https://github.com/sebrudo123/core-os"
+SUPPORT_URL="https://github.com/sebrudo123/core-os/issues"
 UBUNTU_CODENAME=${UBUNTU_CODENAME}
 EOF
 run cp /etc/os-release /usr/lib/os-release
