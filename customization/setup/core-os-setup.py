@@ -186,6 +186,7 @@ def install(opts):
     # --- 5. Configuración del sistema destino -----------------------------
     progress(62, "Configurando el sistema…")
     for m in ("proc", "sys", "dev", "dev/pts", "run"):
+        os.makedirs(os.path.join(TARGET, m), exist_ok=True)
         run(["mount", "--bind", f"/{m}", f"{TARGET}/{m}"], check=False)
 
     # DNS para el sistema destino (por si instala paquetes).
@@ -219,11 +220,16 @@ def install(opts):
     run_chroot(f"id {user} >/dev/null 2>&1 || adduser --disabled-password "
                f"--gecos \"{user}\" {user}")
     run_chroot(f"usermod -aG sudo,adm,docker {user} || usermod -aG sudo,adm {user}")
-    run_chroot(f"echo '{user}:{password}' | chpasswd")
+    safe_pw = password.replace("'", "'\\''")
+    run_chroot(f"echo '{user}:{safe_pw}' | chpasswd")
     run_chroot(f"chage -m 0 -M 99999 -I -1 -E -1 {user}")
 
     # Elimina el asistente del sistema instalado (solo vive en el medio).
     run_chroot("rm -f /etc/xdg/autostart/core-os-setup.desktop || true")
+    # Elimina el usuario del medio en vivo (creado por casper con UID 1000 sin
+    # contraseña y con sudo sin contraseña): no debe quedar en el sistema final.
+    run_chroot("userdel -r ubuntu 2>/dev/null || true")
+    run_chroot("rm -f /etc/sudoers.d/casper || true")
 
     # --- 7. Gestor de arranque --------------------------------------------
     progress(80, "Instalando el gestor de arranque (GRUB)…")

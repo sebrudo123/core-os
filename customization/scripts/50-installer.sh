@@ -31,6 +31,9 @@ if ! grep -qE 'boot=casper|casper' /proc/cmdline 2>/dev/null; then
   [ -d /cdrom ] || exit 0
 fi
 # La ventana (usuario) apunta al servicio en segundo plano (root) que instala.
+# Renderizado por software: WebKit no dibuja bien en VM (llvmpipe) sin esto.
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export LIBGL_ALWAYS_SOFTWARE=1
 exec /usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --ui-only "$@"
 LAUNCHER
 run chmod 0755 /usr/bin/core-os-setup
