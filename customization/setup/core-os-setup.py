@@ -406,8 +406,9 @@ def install(opts):
     # --- 12. Servicios y limpieza final ------------------------------------
     progress(96, "Habilitando los servicios del sistema…")
     in_target("systemctl enable gdm.service NetworkManager.service "
-              "bluetooth.service cups.socket core-os-web-demo.service "
-              "systemd-timesyncd.service fstrim.timer", check=False)
+              "systemd-resolved.service bluetooth.service cups.socket "
+              "core-os-web-demo.service systemd-timesyncd.service fstrim.timer",
+              check=False)
     in_target("systemctl set-default graphical.target", check=False)
     in_target("install -d -m 0755 /var/lib && "
               "printf 'Core OS %s\\n' \"$(sed -n 's/^CORE_OS_RELEASE=\"\\(.*\\)\"/\\1/p' "

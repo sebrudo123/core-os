@@ -36,9 +36,12 @@ bootmodes=('bios.syslinux' 'uefi.grub')
 kernel_params_x86_64="console=tty0 console=ttyS0,115200"
 
 # Permisos aplicados a la raíz del medio tras copiar `airootfs/`.
+#
+# OJO: aquí solo se pueden indicar rutas que EXISTAN en `airootfs/`; mkarchiso
+# comprueba la ruta antes de que se instalen los paquetes (los archivos de los
+# paquetes ya conservan sus permisos). Con una ruta inexistente, mkarchiso
+# aborta con «Outside of valid path».
 file_permissions=(
-  ["/etc/shadow"]="0:0:400"
-  ["/etc/gshadow"]="0:0:400"
   ["/root"]="0:0:750"
-  ["/usr/local/bin/core-os-setup"]="0:0:755"
+  ["/root/customize_airootfs.sh"]="0:0:755"
 )

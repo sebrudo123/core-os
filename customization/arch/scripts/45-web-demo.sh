@@ -62,5 +62,6 @@ UNIT_SRC="${CORE_OS_PAYLOAD}/systemd/core-os-web-demo.service"
 [ -f "$UNIT_SRC" ] || die "falta ${UNIT_SRC}"
 log "Instalando core-os-web-demo.service…"
 run install -m 0644 "$UNIT_SRC" /etc/systemd/system/core-os-web-demo.service
+run systemctl enable core-os-web-demo.service
 
 ok "45-web-demo.sh completado — el panel quedará en http://localhost:${CORE_OS_WEB_DEMO_PORT}"

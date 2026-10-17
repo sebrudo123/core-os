@@ -15,7 +15,11 @@ require_root
 enable() {
     local unit="$1"
     log "Habilitando ${unit}…"
-    run systemctl enable "$unit"
+    # Un servicio que no exista no debe tumbar la construcción: se avisa y se
+    # sigue (las unidades propias de Core OS se habilitan donde se instalan).
+    if ! systemctl enable "$unit"; then
+        warn "no se pudo habilitar ${unit}"
+    fi
 }
 
 # --- Escritorio ------------------------------------------------------------
@@ -39,8 +43,8 @@ systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.serv
 enable cups.socket
 
 # --- Servicios propios de Core OS -----------------------------------------
-enable core-os-web-demo.service
-enable core-os-setupd.service
+# (los habilita cada script que instala su unidad: 45-web-demo.sh y
+#  50-installer.sh, que se ejecutan después de este)
 
 # --- Consolas --------------------------------------------------------------
 enable serial-getty@ttyS0.service

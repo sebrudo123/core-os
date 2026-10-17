@@ -48,6 +48,7 @@ UNIT_SRC="${CORE_OS_PAYLOAD}/systemd/core-os-setupd.service"
 [ -f "$UNIT_SRC" ] || die "falta ${UNIT_SRC}"
 log "Instalando core-os-setupd.service…"
 run install -m 0644 "$UNIT_SRC" /etc/systemd/system/core-os-setupd.service
+run systemctl enable core-os-setupd.service
 
 # --- Inicio automático en la sesión en vivo --------------------------------
 log "Creando el arranque automático del asistente…"
