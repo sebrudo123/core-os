@@ -25,21 +25,23 @@ run cp -a "$SETUP_SRC/." "$SETUP_DEST/"
 # --- Lanzador (solo en el medio en vivo) -----------------------------------
 cat > /usr/bin/core-os-setup <<'LAUNCHER'
 #!/usr/bin/env bash
-# El asistente solo se ejecuta desde el medio de instalación (live).
-if ! grep -qE 'boot=casper|casper' /proc/cmdline 2>/dev/null; then
-  # Señal secundaria: el árbol del medio suele incluir /cdrom.
+# El asistente solo se ejecuta desde el medio de instalación (live): la raíz
+# del medio en vivo es overlayfs y además existe /cdrom. En el sistema
+# instalado, no.
+if ! findmnt -n -o FSTYPE / 2>/dev/null | grep -q overlay; then
   [ -d /cdrom ] || exit 0
 fi
 # La ventana (usuario) apunta al servicio en segundo plano (root) que instala.
 # Renderizado por software: WebKit no dibuja bien en VM (llvmpipe) sin esto.
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
 export LIBGL_ALWAYS_SOFTWARE=1
 exec /usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --ui-only "$@"
 LAUNCHER
 run chmod 0755 /usr/bin/core-os-setup
 
 # --- Servicio (root) que realiza la instalación ----------------------------
-# Solo se activa en el medio en vivo (ConditionKernelCommandLine).
+# Se activa en el medio en vivo (lo detecta el propio ExecStart).
 UNIT_SRC="${CUSTOMIZATION_DIR}/systemd/core-os-setupd.service"
 if [ -f "$UNIT_SRC" ]; then
   log "Instalando el servicio del instalador (core-os-setupd.service)..."

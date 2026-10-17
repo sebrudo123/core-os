@@ -3,17 +3,19 @@
 #  Expone la API local de instalación (127.0.0.1:8765) y se ejecuta como root
 #  para poder particionar y copiar el sistema.
 #
-#  Solo se activa en el MEDIO de instalación (live), no en el sistema
-#  instalado, gracias a ConditionKernelCommandLine.
+#  Solo actúa en el MEDIO de instalación (live). En el sistema instalado el
+#  ExecStart detecta que no es un medio en vivo y termina sin hacer nada.
 # ===========================================================================
 [Unit]
 Description=Core OS Setup (servicio de instalación)
-ConditionKernelCommandLine=boot=casper
 After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --server-only
+# La raíz del medio en vivo es overlayfs (squashfs + overlay) y/o existe
+# /cdrom. En el sistema instalado, no.
+ExecStart=/bin/sh -c "if findmnt -n -o FSTYPE / 2>/dev/null | grep -q overlay || [ -d /cdrom ]; then exec /usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --server-only; else echo 'Core OS Setup: no es el medio en vivo'; fi"
 Restart=on-failure
 RestartSec=2
 
