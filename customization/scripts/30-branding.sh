@@ -48,8 +48,10 @@ else
 fi
 
 # --- /etc/os-release --------------------------------------------------------
+# En Ubuntu moderno /etc/os-release es un symlink a /usr/lib/os-release.
+# Se escribe el archivo real y se recrea el symlink estándar.
 log "Escribiendo identidad del sistema (/etc/os-release)..."
-cat > /etc/os-release <<EOF
+cat > /usr/lib/os-release <<EOF
 PRETTY_NAME="${CORE_OS_NAME} ${CORE_OS_RELEASE}"
 NAME="${CORE_OS_NAME}"
 VERSION_ID="${CORE_OS_RELEASE}"
@@ -61,7 +63,8 @@ HOME_URL="https://github.com/sebrudo123/core-os"
 SUPPORT_URL="https://github.com/sebrudo123/core-os/issues"
 UBUNTU_CODENAME=${UBUNTU_CODENAME}
 EOF
-run cp /etc/os-release /usr/lib/os-release
+rm -f /etc/os-release
+ln -sf ../usr/lib/os-release /etc/os-release
 
 cat > /etc/lsb-release <<EOF
 DISTRIB_ID=${CORE_OS_NAME}

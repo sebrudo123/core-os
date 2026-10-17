@@ -122,7 +122,9 @@ if [ -f "${BRANDING_DIR}/logo/core-os.png" ]; then
   for logo in /usr/share/pixmaps/ubuntu-logo-text.png \
               /usr/share/pixmaps/ubuntu-logo-text-dark.png \
               /usr/share/pixmaps/ubuntu-logo-icon.png; do
-    if [ -f "$logo" ]; then
+    if [ -e "$logo" ] || [ -L "$logo" ]; then
+      # Puede ser un symlink; se elimina para evitar "same file" al copiar.
+      rm -f "$logo"
       run cp "${BRANDING_DIR}/logo/core-os.png" "$logo" 2>/dev/null || true
     fi
   done
