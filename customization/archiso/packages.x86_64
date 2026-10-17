@@ -75,7 +75,14 @@ os-prober
 syslinux
 
 # --- Escritorio GNOME ------------------------------------------------------
-gnome
+# No se instala el grupo `gnome` completo: incluye aplicaciones que arrastran
+# cientos de megabytes innecesarios (evolution-data-server, webkitgtk-6.0,
+# rygel, freerdp, orca, yelp…). Se elige a mano lo que sí forma parte de Core OS;
+# pacman resuelve solo todas las dependencias.
+gnome-shell
+gnome-session
+gnome-settings-daemon
+mutter
 gdm
 gnome-tweaks
 gnome-themes-extra
@@ -89,6 +96,7 @@ gnome-shell-extension-dash-to-panel
 gnome-shell-extension-arc-menu
 gnome-shell-extension-caffeine
 xdg-user-dirs
+xdg-user-dirs-gtk
 xdg-utils
 xdg-desktop-portal-gnome
 xdg-desktop-portal-gtk
@@ -96,9 +104,27 @@ gnome-keyring
 gnome-text-editor
 gnome-system-monitor
 gnome-disk-utility
+gnome-calculator
+gnome-characters
+gnome-clocks
+gnome-font-viewer
+gnome-logs
+gnome-weather
+gnome-software
 nautilus
+file-roller
 gnome-terminal
 gnome-control-center
+loupe
+papers
+showtime
+snapshot
+baobab
+sushi
+gvfs
+gvfs-mtp
+gvfs-gphoto2
+gvfs-smb
 polkit-gnome
 
 # --- Gráficos, vídeo y sonido ---------------------------------------------

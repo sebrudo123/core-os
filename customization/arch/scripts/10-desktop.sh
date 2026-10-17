@@ -39,15 +39,29 @@ declare -A wanted=(
     [arcmenu]="Menú de aplicaciones (estilo Windows)"
     [appindicator]="Bandeja del sistema"
     [desktop-icons-ng]="Iconos del escritorio"
-    [ding]="Iconos del escritorio"
     [caffeine]="Evitar que se suspenda"
 )
-for pattern in dash-to-panel arcmenu appindicator desktop-icons-ng caffeine; do
-    if uuid="$(ext_uuid "$pattern")"; then
-        log "  · ${wanted[$pattern]:-$pattern}: ${uuid}"
+# Cada apartado admite varios nombres: la extensión de los iconos del escritorio
+# se llama «ding» en las versiones recientes del paquete desktop-icons-ng.
+declare -A patterns=(
+    [dash-to-panel]="dash-to-panel"
+    [arcmenu]="arcmenu"
+    [appindicator]="appindicator"
+    [desktop-icons-ng]="ding desktop-icons-ng"
+    [caffeine]="caffeine"
+)
+for key in dash-to-panel arcmenu appindicator desktop-icons-ng caffeine; do
+    uuid=""
+    for pattern in ${patterns[$key]}; do
+        if uuid="$(ext_uuid "$pattern")"; then
+            break
+        fi
+    done
+    if [ -n "$uuid" ]; then
+        log "  · ${wanted[$key]}: ${uuid}"
         enabled_extensions+=("$uuid")
     else
-        warn "no se encontró la extensión '${pattern}'"
+        warn "no se encontró la extensión '${key}'"
     fi
 done
 [ "${#enabled_extensions[@]}" -gt 0 ] || die "no hay ninguna extensión de GNOME instalada"

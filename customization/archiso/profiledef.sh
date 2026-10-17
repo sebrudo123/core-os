@@ -22,10 +22,22 @@ install_dir="coreos"
 arch="x86_64"
 pacman_conf="pacman.conf"
 
-# La raíz del medio en vivo se comprime con xz (mejor ratio que zstd: mantiene
-# la ISO por debajo del límite de 2 GB por asset de GitHub Releases).
+# Compresor de la raíz del medio en vivo.
+#
+# Por defecto se usa xz: comprime mejor que zstd y ayuda a mantener la ISO por
+# debajo del límite de 2 GB por archivo de GitHub Releases.
+#
+# Con CORE_OS_SQUASHFS=zstd se cambia a zstd (bastante más rápido). El script de
+# construcción lo reintenta así automáticamente si xz diera algún problema.
+#
+# No se usa el filtro `-Xbcj x86`: con bloques de 1 MiB, squashfs-tools 4.7
+# aborta la compresión («xz uncompress failed with error code 9») al comprobar
+# el resultado, y el ahorro que aportaba era de apenas un 2 %.
 airootfs_image_type="squashfs"
-airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M' '-Xdict-size' '1M')
+case "${CORE_OS_SQUASHFS:-xz}" in
+    zstd) airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M') ;;
+    *)    airootfs_image_tool_options=('-comp' 'xz' '-b' '1M') ;;
+esac
 bootstrap_tarball_compression=('zstd' '-c' '-T0' '--auto-threads=logical' '--long' '-19')
 
 # BIOS (syslinux, "isohybrid") + UEFI (GRUB con el tema de Core OS).

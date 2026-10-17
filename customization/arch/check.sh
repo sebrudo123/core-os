@@ -39,7 +39,7 @@ PACKAGES="customization/archiso/packages.x86_64"
 
 for pkg in base linux linux-firmware mkinitcpio mkinitcpio-archiso arch-install-scripts \
            grub syslinux efibootmgr os-prober gptfdisk parted dosfstools e2fsprogs \
-           gnome gdm networkmanager firefox flatpak \
+           gnome-shell gnome-session gdm networkmanager firefox flatpak \
            nodejs python python-gobject gtk3 webkit2gtk-4.1; do
     grep -qx "$pkg" "$PACKAGES" || fail "el paquete '$pkg' no está en $PACKAGES"
 done

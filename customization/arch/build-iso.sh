@@ -21,8 +21,9 @@ PROFILE="${REPO_ROOT}/customization/archiso"
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/customization/out}"
 WORK_DIR="${WORK_DIR:-${REPO_ROOT}/customization/work}"
 
-log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
-die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m  aviso\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 require() { command -v "$1" >/dev/null 2>&1 || die "falta '$1'${2:+ ($2)}"; }
 
@@ -47,11 +48,24 @@ bash "${REPO_ROOT}/customization/arch/stage.sh"
 # --- 2. Construir ----------------------------------------------------------
 log "Directorio de trabajo: ${WORK_DIR}"
 log "Salida:                ${OUT_DIR}"
-rm -rf "$WORK_DIR"
-install -d -m 0755 "$WORK_DIR" "$OUT_DIR"
 
-# mkarchiso lee CORE_OS_VERSION desde el entorno al procesar profiledef.sh.
-mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE"
+build_once() {
+    rm -rf "$WORK_DIR"
+    install -d -m 0755 "$WORK_DIR" "$OUT_DIR"
+    # mkarchiso lee CORE_OS_VERSION y CORE_OS_SQUASHFS del entorno al procesar
+    # profiledef.sh.
+    mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE"
+}
+
+# Primero con xz (mejor compresión). Si la compresión fallara, se reintenta con
+# zstd, que es más rápido y no pasa por el mismo camino de código: así la ISO se
+# genera igualmente aunque el compresor xz del sistema tenga algún problema.
+if ! build_once; then
+    warn "la construcción con xz falló: se vuelve a intentar con zstd"
+    rm -f "${OUT_DIR}"/*.iso
+    export CORE_OS_SQUASHFS=zstd
+    build_once || die "la construcción de la ISO falló también con zstd"
+fi
 
 # --- 3. Resultado ----------------------------------------------------------
 iso="$(ls -1 "${OUT_DIR}"/*.iso | head -1)"
