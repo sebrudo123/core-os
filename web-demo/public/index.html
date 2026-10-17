@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Core OS · Consola de administración</title>
+    <meta name="description" content="Modo Demo Web de Core OS: estado del sistema, métricas, builds y terminal para administradores." />
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Barra lateral -->
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="/assets/logo.svg" alt="Core OS" width="36" height="36" />
+          <div>
+            <strong>Core OS</strong>
+            <span id="brand-version" class="muted">—</span>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Navegación principal">
+          <button class="nav-item active" data-view="dashboard">
+            <span class="ico">◧</span> Panel
+          </button>
+          <button class="nav-item" data-view="builds">
+            <span class="ico">⛭</span> Compilaciones
+          </button>
+          <button class="nav-item" data-view="logs">
+            <span class="ico">▤</span> Logs
+          </button>
+          <button class="nav-item" data-view="terminal">
+            <span class="ico">▮</span> Terminal
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div id="conn-status" class="pill pill-off">conectando…</div>
+          <div id="demo-badge" class="pill pill-demo hidden">MODO DEMO</div>
+        </div>
+      </aside>
+
+      <!-- Contenido -->
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 id="view-title">Panel de administración</h1>
+            <p id="view-subtitle" class="muted">Estado del sistema Core OS en tiempo real</p>
+          </div>
+          <div class="topbar-actions">
+            <span id="host-chip" class="chip">host —</span>
+            <button id="refresh-btn" class="btn">Actualizar</button>
+          </div>
+        </header>
+
+        <!-- Vista: Panel -->
+        <section class="view" id="view-dashboard">
+          <div class="grid metrics">
+            <article class="card metric" data-metric="cpu">
+              <header><h3>CPU</h3><span class="value" id="m-cpu">—</span></header>
+              <div class="bar"><i id="bar-cpu" style="width:0%"></i></div>
+              <p class="muted small" id="m-cpu-detail">—</p>
+            </article>
+            <article class="card metric" data-metric="memory">
+              <header><h3>Memoria</h3><span class="value" id="m-mem">—</span></header>
+              <div class="bar"><i id="bar-mem" style="width:0%"></i></div>
+              <p class="muted small" id="m-mem-detail">—</p>
+            </article>
+            <article class="card metric" data-metric="disk">
+              <header><h3>Disco</h3><span class="value" id="m-disk">—</span></header>
+              <div class="bar"><i id="bar-disk" style="width:0%"></i></div>
+              <p class="muted small" id="m-disk-detail">—</p>
+            </article>
+            <article class="card metric" data-metric="network">
+              <header><h3>Red</h3><span class="value" id="m-net">—</span></header>
+              <div class="bar"><i id="bar-net" style="width:0%"></i></div>
+              <p class="muted small" id="m-net-detail">—</p>
+            </article>
+          </div>
+
+          <div class="grid two">
+            <article class="card">
+              <h3>Sistema</h3>
+              <dl class="kv" id="sys-info"></dl>
+            </article>
+            <article class="card">
+              <h3>Servicios</h3>
+              <ul class="services" id="services"></ul>
+            </article>
+          </div>
+
+          <article class="card">
+            <h3>Progreso del proyecto</h3>
+            <ul class="goals" id="goals"></ul>
+          </article>
+        </section>
+
+        <!-- Vista: Compilaciones -->
+        <section class="view hidden" id="view-builds">
+          <div class="grid stats" id="build-stats"></div>
+          <article class="card">
+            <div class="card-head">
+              <h3>Historial de compilaciones</h3>
+              <label class="check">
+                <input type="checkbox" id="remote-toggle" checked /> incluir GitHub Actions
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Build</th><th>Estado</th><th>Rama</th><th>Commit</th>
+                    <th>Duración</th><th>Inicio</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="builds-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <!-- Vista: Logs -->
+        <section class="view hidden" id="view-logs">
+          <div class="grid two logs-layout">
+            <article class="card">
+              <h3>Archivos de log</h3>
+              <ul class="log-list" id="log-list"></ul>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <h3 id="log-title">Salida</h3>
+                <button class="btn small" id="log-copy">Copiar</button>
+              </div>
+              <pre class="log-view" id="log-view">Selecciona un log…</pre>
+            </article>
+          </div>
+        </section>
+
+        <!-- Vista: Terminal -->
+        <section class="view hidden" id="view-terminal">
+          <article class="card terminal-card">
+            <div class="card-head">
+              <h3>Terminal segura (lista blanca)</h3>
+              <span class="muted small">Escribe <code>help</code> para ver los comandos</span>
+            </div>
+            <pre class="terminal" id="terminal-output"></pre>
+            <form class="terminal-form" id="terminal-form" autocomplete="off">
+              <span class="prompt">coreadmin@core-os:~$</span>
+              <input id="terminal-input" placeholder="help" aria-label="Comando" />
+              <button class="btn" type="submit">Ejecutar</button>
+            </form>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

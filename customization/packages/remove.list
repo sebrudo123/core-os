@@ -1,0 +1,23 @@
+# Core OS — paquetes a eliminar de la base de Ubuntu
+# Un nombre por línea. Se purgan en `scripts/10-install-packages.sh`.
+
+# Juegos y contenido promocional
+gnome-games
+aisleriot
+mahjongg
+quadrapassel
+gnome-mahjongg
+gnome-mines
+gnome-sudoku
+
+# Snap Store / snapd (Core OS usa APT + Flatpak)
+snapd
+
+# Apps de ejemplo / pesadas que no usamos
+totem
+rhythmbox
+cheese
+simple-scan
+gnome-contacts
+gnome-maps
+gnome-weather

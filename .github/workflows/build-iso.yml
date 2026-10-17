@@ -1,0 +1,150 @@
+name: Build Core OS ISO
+
+# Se ejecuta en cada push a main, en tags v* y manualmente.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      ubuntu_release:
+        description: 'Release de Ubuntu base'
+        required: true
+        default: '24.04'
+      ubuntu_codename:
+        description: 'Codename de Ubuntu base'
+        required: true
+        default: 'noble'
+      build_iso:
+        description: 'Construir la ISO completa (consume ~20GB / 30min)'
+        type: boolean
+        required: true
+        default: true
+
+# Evita builds concurrentes del mismo ref.
+concurrency:
+  group: build-iso-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  UBUNTU_RELEASE: ${{ github.event.inputs.ubuntu_release || '24.04' }}
+  UBUNTU_CODENAME: ${{ github.event.inputs.ubuntu_codename || 'noble' }}
+  CORE_OS_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.0.0+{0}', github.run_number) }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Validación rápida de la personalización
+  # ---------------------------------------------------------------------------
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Analizar scripts de personalización
+        run: shellcheck -x -S warning customization/scripts/*.sh customization/build-iso.sh
+
+      - name: Validar scripts con "bash -n"
+        run: |
+          for f in customization/scripts/*.sh customization/build-iso.sh; do
+            echo "-> syntax check $f"
+            bash -n "$f"
+          done
+
+      - name: Validar listas de paquetes
+        run: |
+          test -s customization/packages/packages.list
+          grep -vE '^\s*(#|$)' customization/packages/packages.list
+
+  # ---------------------------------------------------------------------------
+  # 2. Empaquetado de la personalización (artefacto ligero, siempre disponible)
+  # ---------------------------------------------------------------------------
+  package:
+    runs-on: ubuntu-24.04
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Empaquetar customization/
+        run: |
+          tar \
+            --exclude='./out' \
+            --exclude='./work' \
+            --exclude='./cache' \
+            -czf "core-os-customization-${CORE_OS_VERSION}.tar.gz" \
+            -C customization .
+
+      - name: Subir artefacto de personalización
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-os-customization-${{ env.CORE_OS_VERSION }}
+          path: core-os-customization-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # 3. Construcción de la ISO (headless, sin Cubic)
+  # ---------------------------------------------------------------------------
+  build-iso:
+    runs-on: ubuntu-24.04
+    needs: package
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_iso }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # Libera espacio: los runners traen ~14GB útiles y la ISO necesita más.
+      - name: Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      "$AGENT_TOOLSDIRECTORY" || true
+          sudo apt-get clean
+          df -h /
+
+      - name: Instalar dependencias de construcción
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xorriso squashfs-tools rsync wget ca-certificates \
+            isolinux syslinux-utils genisoimage
+
+      - name: Construir la ISO de Core OS
+        env:
+          CORE_OS_RELEASE: ${{ env.CORE_OS_VERSION }}
+          UBUNTU_RELEASE: ${{ env.UBUNTU_RELEASE }}
+          UBUNTU_CODENAME: ${{ env.UBUNTU_CODENAME }}
+        run: |
+          sudo --preserve-env=CORE_OS_RELEASE,UBUNTU_RELEASE,UBUNTU_CODENAME \
+            ./customization/build-iso.sh --release "${CORE_OS_RELEASE}"
+
+      - name: Generar checksums
+        run: |
+          cd customization/out
+          sha256sum ./*.iso > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Subir la ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-os-iso-${{ env.CORE_OS_VERSION }}
+          path: |
+            customization/out/*.iso
+            customization/out/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publicar Release (solo en tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Core OS ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            customization/out/*.iso
+            customization/out/SHA256SUMS

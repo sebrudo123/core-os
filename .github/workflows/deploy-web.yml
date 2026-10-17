@@ -1,0 +1,54 @@
+name: Deploy Web Demo (Vercel)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web-demo/**'
+      - 'vercel.json'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Los secretos no se pueden usar en un `if` a nivel de job, así que los
+  # detectamos en un step y exponemos el resultado como output.
+  check-secrets:
+    runs-on: ubuntu-24.04
+    outputs:
+      has_vercel: ${{ steps.check.outputs.has_vercel }}
+    steps:
+      - id: check
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then
+            echo "has_vercel=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "has_vercel=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    runs-on: ubuntu-24.04
+    needs: check-secrets
+    if: needs.check-secrets.outputs.has_vercel == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Desplegar en Vercel (producción)
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npm i -g vercel@latest
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

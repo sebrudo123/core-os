@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Verifica los scripts de personalización
+  # ---------------------------------------------------------------------------
+  shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Analizar scripts
+        run: shellcheck -x -S warning customization/scripts/*.sh customization/build-iso.sh
+
+      - name: Comprobar sintaxis bash
+        run: for f in customization/scripts/*.sh customization/build-iso.sh; do bash -n "$f"; done
+
+  # ---------------------------------------------------------------------------
+  # Verifica el Modo Demo Web (build + smoke test de la API)
+  # ---------------------------------------------------------------------------
+  web-demo:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web-demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-demo/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Comprobación de sintaxis
+        run: npm run check
+
+      - name: Smoke test de la API
+        run: |
+          node server.js &
+          SERVER_PID=$!
+          sleep 3
+          curl -fsS http://localhost:3000/api/health
+          curl -fsS http://localhost:3000/api/status   | head -c 400
+          curl -fsS http://localhost:3000/api/metrics  | head -c 400
+          kill "$SERVER_PID"

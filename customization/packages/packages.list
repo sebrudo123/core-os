@@ -1,0 +1,70 @@
+# Core OS — paquetes a instalar
+# Formato: un nombre de paquete APT por línea. Los comentarios (#) se ignoran.
+# Se instalan vía `scripts/10-install-packages.sh`.
+
+# --- Base y utilidades de sistema ---
+curl
+wget
+git
+vim
+nano
+htop
+btop
+tree
+unzip
+zip
+p7zip-full
+jq
+rsync
+net-tools
+dnsutils
+traceroute
+tmux
+
+# --- Diagnóstico y monitorización ---
+sysstat
+iotop
+nethogs
+lm-sensors
+smartmontools
+gdisk
+nvme-cli
+fio
+
+# --- Contenedores y virtualización ---
+docker.io
+docker-compose-v2
+qemu-guest-agent
+
+# --- Red y seguridad ---
+ufw
+openssh-server
+iptables
+fail2ban
+nmap
+netcat-openbsd
+
+# --- Escritorio GNOME ---
+gnome-shell-extension-manager
+gnome-tweaks
+gnome-disk-utility
+gnome-system-monitor
+file-roller
+gufw
+
+# --- Navegación y ofimática ---
+firefox
+libreoffice-calc
+libreoffice-writer
+thunderbird
+
+# --- Fuentes e idiomas ---
+fonts-firacode
+fonts-noto
+fonts-noto-color-emoji
+language-pack-es
+language-pack-es-base
+
+# --- Core OS propio (paquetes .deb locales, ver scripts/40) ---
+# core-os-admin
+# core-os-branding

@@ -1,0 +1,28 @@
+# Blueprint de Render.com para el Modo Demo Web de Core OS.
+# Úsalo desde el dashboard de Render: New > Blueprint > selecciona este repo.
+services:
+  - type: web
+    name: core-os-web-demo
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: web-demo
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # false = métricas REALES del host de Render (recomendado en Render).
+      - key: DEMO_MODE
+        value: "false"
+      - key: ALLOW_TERMINAL
+        value: "false"
+      - key: LOG_LEVEL
+        value: "info"
+      # Configura estos dos en el dashboard (son secretos / dependen del repo):
+      - key: GITHUB_REPO
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false

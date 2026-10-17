@@ -1,0 +1,10 @@
+# Core OS — extensiones de GNOME Shell
+# Formato:  <paquete-apt>|<uuid-de-la-extension>
+# El uuid es opcional; si se indica, la extensión se habilita en dconf.
+# Deben existir como paquetes APT (Ubuntu no instala extensiones desde
+# extensions.gnome.org en modo offline).
+
+gnome-shell-extension-appindicator|appindicatorsupport@rgcjonas.gmail.com
+gnome-shell-extension-desktop-icons-ng|ding@rastersoft.com
+gnome-shell-extension-ubuntu-dock|ubuntu-dock@ubuntu.com
+gnome-shell-extension-manager|
