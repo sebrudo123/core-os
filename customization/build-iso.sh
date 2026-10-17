@@ -30,6 +30,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CUSTOMIZATION_DIR="$SCRIPT_DIR"
+REPO_ROOT="$(cd "$CUSTOMIZATION_DIR/.." && pwd)"
 
 CORE_OS_RELEASE="${CORE_OS_RELEASE:-1.0.0}"
 UBUNTU_RELEASE="${UBUNTU_RELEASE:-24.04}"
@@ -225,6 +226,18 @@ copy_customization_into_chroot() {
   rsync -a --delete \
     --exclude 'out/' --exclude 'work/' --exclude 'cache/' \
     "$CUSTOMIZATION_DIR/" "$EDIT_TREE/opt/core-os/"
+
+  # El Modo Demo Web forma parte del sistema instalado: se copia tal cual para
+  # que el panel del SO sea IDÉNTICO a la versión desplegada en la web.
+  if [ -d "$REPO_ROOT/web-demo" ]; then
+    log "Copiando el Modo Demo Web (web-demo/) dentro del chroot..."
+    mkdir -p "$EDIT_TREE/opt/core-os/web-demo"
+    rsync -a --delete \
+      --exclude 'node_modules/' --exclude '.vercel/' --exclude '*.log' \
+      "$REPO_ROOT/web-demo/" "$EDIT_TREE/opt/core-os/web-demo/"
+  else
+    warn "no se encontró $REPO_ROOT/web-demo; el panel web no se instalará"
+  fi
   ok "Personalización copiada a /opt/core-os"
 }
 

@@ -1,0 +1,30 @@
+# ===========================================================================
+#  core-os-web-demo.service — Panel de administración web de Core OS.
+#  Se instala en /etc/systemd/system/core-os-web-demo.service
+#  y se habilita en el arranque por customization/scripts/45-web-demo.sh
+# ===========================================================================
+[Unit]
+Description=Core OS Web Demo (panel de administración)
+Documentation=https://github.com/core-os/core-os
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/usr/lib/core-os/web-demo
+# La configuración vive en /etc/core-os/web-demo.env
+EnvironmentFile=-/etc/core-os/web-demo.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=core-os-web-demo
+# Endurecimiento básico
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

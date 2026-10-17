@@ -18,6 +18,7 @@ export UBUNTU_CODENAME="${UBUNTU_CODENAME:-noble}"
 export CUSTOMIZATION_DIR
 
 log()  { printf '\033[1;34m[core-os]\033[0m %s\n' "$*"; }
+ok()   { printf '\033[1;32m[core-os]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[core-os] aviso:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[core-os] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 

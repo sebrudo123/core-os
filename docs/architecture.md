@@ -15,11 +15,22 @@
              customization/         │            web-demo/
         (se empaqueta en la ISO)    │     (panel de administración)
                                     ▼            │
-                          ┌──────────────┐       │  Vercel (frontend + API serverless)
+                          ┌──────────────┐       │  Vercel  → vista previa pública (demo)
                           │  Core OS ISO │       ├─►
-                          │  Ubuntu base │       │  Render (API con métricas reales)
-                          └──────────────┘       └─►
+                          │  Ubuntu base │       │  Render  → vista previa con métricas reales
+                          └──────┬───────┘       └─►
+                                 │ instalación
+                                 ▼
+                     ┌────────────────────────────┐
+                     │  Core OS instalado          │
+                     │  └─ core-os-web-demo.service│  ← MISMO panel, métricas reales
+                     │     http://<host>:8080      │     (DEMO_MODE=false)
+                     └────────────────────────────┘
 ```
+
+> El panel es **el mismo código** en los tres entornos. `45-web-demo.sh` lo
+> instala dentro del SO (Node.js + systemd, puerto 8080); Vercel y Render solo
+> sirven la misma app como vista previa para administradores.
 
 ## Componentes
 
@@ -52,6 +63,11 @@ Flujo interno de `build-iso.sh`:
 
 Aplicación **Node.js + Express** con una SPA de un solo archivo (sin framework)
 para minimizar dependencias y facilitar el despliegue.
+
+Forma parte de la ISO: `scripts/45-web-demo.sh` instala Node.js, copia la app a
+`/usr/lib/core-os/web-demo`, crea `/etc/core-os/web-demo.env` y habilita el
+servicio `core-os-web-demo.service` (puerto 8080). Así, el panel que se ve en la
+web y el que se ejecuta en el sistema instalado son **exactamente el mismo**.
 
 ```text
 public/ (SPA: index.html, styles.css, app.js)

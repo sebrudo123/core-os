@@ -161,7 +161,7 @@ export async function getStatus() {
       { name: 'docker.service', status: 'active', enabled: true },
       { name: 'ufw.service', status: 'active', enabled: true },
       { name: 'fail2ban.service', status: 'active', enabled: true },
-      { name: 'core-os-demo.service', status: 'active', enabled: true },
+      { name: 'core-os-web-demo.service', status: 'active', enabled: true },
     ],
     goals: [
       { id: 'iso', label: 'ISO reproducible', progress: 100, state: 'done' },

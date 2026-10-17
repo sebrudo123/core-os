@@ -3,6 +3,11 @@
 La app de `web-demo/` se puede desplegar en **Vercel**, **Render.com** o tu
 propia **VPS con Docker**. El mismo código sirve para las tres.
 
+> 🖥️ **En Core OS ya viene instalado.** `scripts/45-web-demo.sh` copia la app a
+> `/usr/lib/core-os/web-demo`, crea `/etc/core-os/web-demo.env` y habilita
+> `core-os-web-demo.service`. Tras instalar la ISO: **`http://<ip>:8080`**.
+> Las opciones siguientes son para la **vista previa pública** del mismo panel.
+
 ---
 
 ## Opción A — Vercel (frontend + API serverless) · recomendado para la demo

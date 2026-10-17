@@ -22,7 +22,7 @@ El proyecto vive en dos grandes bloques:
 | Bloque | Carpeta | Propósito |
 | --- | --- | --- |
 | **Personalización del SO** | [`customization/`](./customization) | Paquetes, tema, branding, scripts de post-instalación, autoinstall y el constructor de la ISO. |
-| **Modo Demo Web** | [`web-demo/`](./web-demo) | App Node.js/Express con dashboard admin, API de métricas, logs y terminal web. |
+| **Modo Demo Web** | [`web-demo/`](./web-demo) | El **panel de administración** de Core OS. Se instala dentro del SO (servicio systemd) y se despliega también en la web para previsualizarlo. |
 
 ---
 
@@ -38,6 +38,7 @@ core-os/
 ├── customization/
 │   ├── packages/                # Listas de paquetes a instalar / eliminar
 │   ├── scripts/                 # Scripts de post-instalación (orden 00..99)
+│   ├── systemd/                 # Unidades systemd (panel web)
 │   ├── gnome/                   # dconf + extensiones de GNOME
 │   ├── kde/                     # Perfil de Plasma (opcional)
 │   ├── branding/                # Logos, wallpapers, identidad
@@ -73,6 +74,12 @@ npm run dev            # -> http://localhost:3000
 
 El dashboard funciona en **modo demo** por defecto: si no hay un Core OS real
 detrás, genera métricas simuladas y sirve `data/builds.json` como historial.
+
+> **Dentro de Core OS el panel es el mismo**, pero con métricas reales: al
+> instalar la ISO, `scripts/45-web-demo.sh` instala Node.js, copia `web-demo/` a
+> `/usr/lib/core-os/web-demo` y habilita el servicio `core-os-web-demo.service`.
+> El panel queda accesible en **`http://<ip-del-equipo>:8080`**, idéntico a la
+> versión web pero leyendo el sistema de verdad.
 
 ### 2. Construir la ISO de Core OS (en Ubuntu 22.04/24.04)
 

@@ -11,6 +11,7 @@ proyecto de Cubic o pasarla al `build-iso.sh` para una construcción headless.
 | `packages/packages.list` | Paquetes APT que se instalan en Core OS. |
 | `packages/remove.list` | Paquetes que se eliminan de la base de Ubuntu. |
 | `scripts/NN-*.sh` | Scripts de post-instalación. Se ejecutan **dentro del chroot**, en orden numérico. |
+| `systemd/` | Unidades systemd que se instalan en el sistema (p. ej. el panel web). |
 | `gnome/dconf/core-os.dconf` | Ajustes de GNOME (tema, dock, atajos). Cargables con `dconf load`. |
 | `gnome/extensions.list` | Extensiones de GNOME Shell a habilitar. |
 | `kde/` | Perfil alternativo para KDE Plasma (opcional). |
@@ -28,6 +29,7 @@ proyecto de Cubic o pasarla al `build-iso.sh` para una construcción headless.
 20-gnome-theme.sh       # tema, dconf, extensiones, fuentes
 30-branding.sh          # logo, wallpapers, os-release, plymouth
 40-core-services.sh     # servicios, primer arranque, usuario admin
+45-web-demo.sh          # instala el panel web (Node + systemd) en el SO
 99-cleanup.sh           # limpia apt, logs, historial bash (reduce tamaño)
 ```
 

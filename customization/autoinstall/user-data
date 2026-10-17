@@ -45,6 +45,8 @@ autoinstall:
     # Copia la personalización incluida en la ISO y ejecuta los scripts.
     - curtin in-target -- mkdir -p /opt/core-os
     - cp -a /cdrom/core-os-customization/* /target/opt/core-os/ 2>/dev/null || true
+    - cp -a /cdrom/web-demo /target/opt/core-os/web-demo 2>/dev/null || true
     - curtin in-target -- bash -c 'for s in /opt/core-os/scripts/0*.sh /opt/core-os/scripts/9*.sh; do bash "$s"; done'
     - curtin in-target -- systemctl enable ssh
+    - curtin in-target -- systemctl enable core-os-web-demo.service
     - curtin in-target -- bash -c 'echo "Core OS instalado correctamente" > /etc/core-os-installed'

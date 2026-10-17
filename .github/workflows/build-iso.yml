@@ -70,20 +70,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Empaquetar customization/
+      - name: Empaquetar customization/ + web-demo/
         run: |
           tar \
-            --exclude='./out' \
-            --exclude='./work' \
-            --exclude='./cache' \
-            -czf "core-os-customization-${CORE_OS_VERSION}.tar.gz" \
-            -C customization .
+            --exclude='customization/out' \
+            --exclude='customization/work' \
+            --exclude='customization/cache' \
+            --exclude='web-demo/node_modules' \
+            --exclude='web-demo/.vercel' \
+            -czf "core-os-source-${CORE_OS_VERSION}.tar.gz" \
+            customization web-demo
 
       - name: Subir artefacto de personalización
         uses: actions/upload-artifact@v4
         with:
-          name: core-os-customization-${{ env.CORE_OS_VERSION }}
-          path: core-os-customization-*.tar.gz
+          name: core-os-source-${{ env.CORE_OS_VERSION }}
+          path: core-os-source-*.tar.gz
           if-no-files-found: error
           retention-days: 30
 

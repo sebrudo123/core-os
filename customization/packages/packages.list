@@ -21,6 +21,10 @@ dnsutils
 traceroute
 tmux
 
+# --- Runtime del panel web (Modo Demo Web / administración) ---
+ca-certificates
+gnupg
+
 # --- Diagnóstico y monitorización ---
 sysstat
 iotop

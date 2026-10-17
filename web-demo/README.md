@@ -1,7 +1,15 @@
 # Core OS — Modo Demo Web
 
-Panel de administración ligero (estilo CasaOS) para Core OS: estado del sistema,
-métricas, historial de compilaciones, logs y una terminal web segura.
+El **panel de administración** de Core OS: estado del sistema, métricas,
+historial de compilaciones, logs y una terminal web segura.
+
+Es el **mismo panel** en todas partes:
+
+- 🖥️ **Instalado en Core OS** — `scripts/45-web-demo.sh` lo instala como servicio
+  systemd (`core-os-web-demo.service`) y queda en **`http://<ip>:8080`** con
+  métricas reales del sistema.
+- ☁️ **Vista previa pública** — la misma app desplegada en Vercel/Render para que
+  los administradores la prueben sin instalar nada.
 
 - **Stack**: Node.js + Express + frontend vanilla (sin frameworks).
 - **Sin base de datos**: historial en `data/builds.json`, fusionado con GitHub Actions.
@@ -50,6 +58,13 @@ web-demo/
 
 Toda la configuración se controla por variables de entorno. Ver
 [`.env.example`](./.env.example) y [`docs/deploy.md`](../docs/deploy.md).
+
+> En Core OS instalado, la configuración vive en `/etc/core-os/web-demo.env`
+> (generada por `45-web-demo.sh`). Para cambiar el puerto o el modo:
+> ```bash
+> sudo nano /etc/core-os/web-demo.env
+> sudo systemctl restart core-os-web-demo
+> ```
 
 ## Despliegue
 
