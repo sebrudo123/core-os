@@ -132,17 +132,54 @@ Ver [`docs/cubic-guide.md`](./docs/cubic-guide.md). Cubic es ideal para
 
 ## Pipeline CI/CD
 
-`build-iso.yml` se dispara con `push` a `main` (y `workflow_dispatch`):
+`build-iso.yml` se dispara con `push` a `main`, con tags `v*` y con
+`workflow_dispatch`:
 
 1. **validate** — `shellcheck` de los scripts + validación de las listas de paquetes.
 2. **package** — empaqueta `customization/` en un tarball versionado (artefacto siempre disponible).
-3. **build-iso** — ejecuta `customization/build-iso.sh` en un runner Ubuntu,
-   libera espacio en disco, genera la `.iso` y la sube como artefacto
-   (y la adjunta a un Release si el push lleva un tag `v*`).
+3. **build-iso** — descarga la ISO base de Ubuntu, la **monta**, remasteriza la
+   capa base (`casper/minimal.squashfs`), ejecuta los scripts de personalización
+   en un `chroot`, reempaqueta el `squashfs`, regenera los checksums y genera
+   `core-os-<versión>-amd64.iso`.
 
-> ⚠️ Construir una ISO completa consume ~15-20 GB de disco y 20-40 min. En
-> GitHub-hosted runners funciona con el paso de "liberar espacio", pero para
-> iteración intensa se recomienda un runner self-hosted o construir en local.
+Estado: **el pipeline pasa en verde y la ISO se construye correctamente**
+(probado en GitHub Actions: `core-os-0.0.0+10-amd64.iso`, ~5.8 GB).
+
+### Descargar la ISO
+
+| Vía | Cómo |
+| --- | --- |
+| **Release (recomendado)** | `git tag v1.0.0 && git push origin v1.0.0` → se publica una Release con la ISO **dividida en partes <2 GB** (límite de GitHub). |
+| **Artefacto del run** | Actions → *Build Core OS ISO* → run → *Artifacts* (`core-os-iso-*`); expira a los 7 días. |
+| **Local** | `sudo ./customization/build-iso.sh --release 1.0.0` en Ubuntu 24.04. |
+
+Para reconstruir la ISO desde las partes:
+
+```bash
+cat core-os-part-*.part > core-os-1.0.0-amd64.iso
+sha256sum -c PARTS-SHA256SUMS   # o verifica contra SHA256SUMS
+```
+
+> ⚠️ Construir una ISO completa consume ~15-25 GB de disco y ~7 min en
+> GitHub-hosted runners (gracias al paso de "liberar espacio"). Para iteración
+> intensa se recomienda un runner self-hosted o construir en local.
+>
+> ℹ️ La ISO pesa ~6 GB y supera la cuota de artefactos de GitHub en algunos
+> planes; por eso la subida es *best-effort* y la distribución real se hace por
+> Release en partes.
+
+---
+
+## Identidad propia (resumen técnico)
+
+| Capa | Implementación | Archivo |
+| --- | --- | --- |
+| Arranque | Tema GRUB con logo, fondo y `GRUB_DISTRIBUTOR="Core OS"` | `customization/branding/grub/`, `scripts/35-debrand-ubuntu.sh` |
+| Splash | Tema Plymouth (`core-os`) con logo animado | `customization/branding/plymouth/` |
+| Login | GDM con logo/fondo oscuros de Core OS | `scripts/35-debrand-ubuntu.sh` |
+| Escritorio | Barra abajo centrada, botón Inicio, apps ancladas, tema oscuro | `scripts/25-desktop-shell.sh` |
+| Sistema | `os-release`/`issue`/`motd` propios, sin telemetría de Ubuntu | `scripts/30-branding.sh`, `packages/remove.list` |
+| Recursos | PNG generados por código (sin dependencias) | `branding/tools/generate-assets.mjs` |
 
 ---
 
@@ -166,8 +203,9 @@ Guía paso a paso: [`docs/deploy.md`](./docs/deploy.md).
 
 - [x] Estructura del repositorio y documentación
 - [x] Scripts de personalización + autoinstall
-- [x] Constructor de ISO reproducible
-- [x] Workflow de CI/CD (empaquetado + ISO)
+- [x] Constructor de ISO reproducible (**verificado en CI**)
+- [x] Workflow de CI/CD (empaquetado + ISO + Release en tags)
+- [x] Identidad propia: GRUB, Plymouth, GDM y escritorio tipo Windows 11
 - [x] Modo Demo Web (dashboard, métricas, logs, terminal)
 - [ ] Firma de la ISO (GPG) y verificación de arranque seguro
 - [ ] Repositorio APT propio (paquetes `core-os-*`)
