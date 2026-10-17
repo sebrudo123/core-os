@@ -130,8 +130,8 @@ jobs:
           if [ "$size" -lt 2100000000 ]; then
             {
               echo "files<<ASSETS_EOF"
-              echo "$iso"
-              echo "SHA256SUMS"
+              echo "customization/out/${iso#./}"
+              echo "customization/out/SHA256SUMS"
               echo "ASSETS_EOF"
             } >> "$GITHUB_OUTPUT"
             echo "info=La ISO cabe en un único archivo." >> "$GITHUB_OUTPUT"
@@ -142,8 +142,8 @@ jobs:
             rm -f "$iso"
             {
               echo "files<<ASSETS_EOF"
-              ls -1 core-os-part-*
-              echo "PARTS-SHA256SUMS"
+              printf 'customization/out/%s\n' core-os-part-*
+              echo "customization/out/PARTS-SHA256SUMS"
               echo "ASSETS_EOF"
             } >> "$GITHUB_OUTPUT"
             echo "info=La ISO supera los 2 GB de GitHub: se publica en partes." >> "$GITHUB_OUTPUT"
@@ -154,8 +154,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          # Los archivos preparados en el paso anterior están en customization/out
-          working-directory: customization/out
           name: Core OS ${{ github.ref_name }}
           generate_release_notes: true
           body: |
