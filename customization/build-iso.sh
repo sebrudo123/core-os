@@ -338,10 +338,13 @@ setup_chroot_mounts() {
       warn "no se pudo montar /$m (¿contenedor sin privilegios?)"
     fi
   done
-  # DNS para que apt funcione dentro del chroot
+  # DNS para que apt funcione dentro del chroot.
+  # OJO: /etc/resolv.conf suele ser un symlink absoluto; hay que reemplazarlo.
   if [ -f /etc/resolv.conf ]; then
     mkdir -p "$EDIT_TREE/etc"
-    cp -f /etc/resolv.conf "$EDIT_TREE/etc/resolv.conf"
+    rm -f "$EDIT_TREE/etc/resolv.conf"
+    cp -f /etc/resolv.conf "$EDIT_TREE/etc/resolv.conf" 2>/dev/null || \
+      printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > "$EDIT_TREE/etc/resolv.conf"
   fi
 }
 

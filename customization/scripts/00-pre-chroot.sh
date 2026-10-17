@@ -29,6 +29,18 @@ log "Escrito /etc/core-os/release"
 command -v apt-get >/dev/null 2>&1 || die "apt-get no está disponible: ¿estamos dentro de Ubuntu?"
 [ -d /etc/apt ] || die "no existe /etc/apt"
 
+# Asegura fuentes APT (algunas imágenes base no las traen dentro del squashfs).
+if [ ! -s /etc/apt/sources.list ] \
+   && ! ls /etc/apt/sources.list.d/*.sources >/dev/null 2>&1; then
+  log "Sin fuentes APT; añadiendo los repositorios oficiales de Ubuntu ${UBUNTU_CODENAME}"
+  cat > /etc/apt/sources.list <<EOF
+deb http://archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME} main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME}-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME}-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu ${UBUNTU_CODENAME}-security main restricted universe multiverse
+EOF
+fi
+
 # Evita diálogos interactivos durante la construcción
 export DEBIAN_FRONTEND=noninteractive
 log "DEBIAN_FRONTEND=noninteractive exportado"
