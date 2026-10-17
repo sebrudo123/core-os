@@ -1,0 +1,27 @@
+# ===========================================================================
+#  core-os-live-session.service — asegura el escritorio del medio en vivo.
+#
+#  GDM abre la sesión automática en cuanto arranca. En algunos equipos (y sobre
+#  todo en máquinas virtuales) eso ocurre antes de que la parte gráfica esté
+#  del todo lista: la sesión se pierde y el equipo se queda en la pantalla de
+#  saludo. Cuando se intenta un poco más tarde sí funciona (es lo que pasa al
+#  escribir la contraseña a mano).
+#
+#  Este servicio, SOLO en el MEDIO EN VIVO, comprueba durante los primeros
+#  minutos si hay una sesión de escritorio activa y, si no la hay, le pide a
+#  GDM que lo vuelva a intentar. Nunca toca nada si ya hay escritorio.
+# ===========================================================================
+[Unit]
+Description=Core OS — sesión de escritorio del medio en vivo
+ConditionPathExists=/run/archiso
+After=graphical.target gdm.service
+Wants=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/core-os-live-session
+RemainAfterExit=yes
+TimeoutStartSec=600
+
+[Install]
+WantedBy=graphical.target

@@ -61,6 +61,7 @@ for file in customization/archiso/profiledef.sh \
             customization/systemd/core-os-setupd.service \
             customization/systemd/core-os-web-demo.service \
             customization/systemd/core-os-diagnostico.service \
+            customization/systemd/core-os-live-session.service \
             customization/branding/grub/theme.txt \
             customization/branding/grub/background.png \
             customization/branding/logo/core-os.png \
