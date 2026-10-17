@@ -339,7 +339,7 @@ def install(opts):
     in_target("systemctl disable serial-getty@ttyS0.service getty@tty2.service",
               check=False)
     # Sin inicio de sesión automático en el sistema final
-    in_target("printf '[daemon]\\nAutomaticLoginEnable=false\\n\\n"
+    in_target("printf '[daemon]\\nWaylandEnable=false\\nAutomaticLoginEnable=false\\n\\n"
               "[security]\\n\\n[xdmcp]\\n\\n[chooser]\\n\\n[debug]\\n' "
               "> /etc/gdm/custom.conf")
     # El asistente de instalación no se copia al sistema instalado

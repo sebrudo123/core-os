@@ -1,0 +1,31 @@
+# ===========================================================================
+#  core-os-diagnostico.service — informe del estado del escritorio.
+#
+#  Escribe en la consola serie (y en /var/log/core-os/diagnostico.txt) un
+#  informe con lo que ha pasado al arrancar el escritorio. Sirve para saber
+#  por qué un equipo no llega a mostrar la sesión gráfica: en las compilaciones
+#  de CI la consola serie se guarda en un archivo, así que el informe se puede
+#  leer sin tener el equipo delante.
+#
+#  Solo se ejecuta en el MEDIO EN VIVO (archiso crea /run/archiso al arrancar
+#  desde la ISO). En el sistema instalado no queda ningún servicio automático
+#  de diagnóstico, pero el informe se puede pedir a mano:
+#
+#      sudo core-os-diagnostico
+# ===========================================================================
+[Unit]
+Description=Core OS — informe de diagnóstico del escritorio
+ConditionPathExists=/run/archiso
+After=graphical.target gdm.service
+Wants=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/core-os-diagnostico --seguimiento
+StandardOutput=journal+console
+StandardError=journal+console
+SyslogIdentifier=core-os-diagnostico
+TimeoutStartSec=900
+
+[Install]
+WantedBy=graphical.target
