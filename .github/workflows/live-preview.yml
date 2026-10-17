@@ -80,10 +80,10 @@ jobs:
           mkdir -p dl parts
           if [ -n "$run_id" ]; then
             echo "Descargando la ISO del artefacto de la ejecución ${run_id}…"
+            # `gh run download` ya descomprime el artefacto: deja el archivo tal cual.
             gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
               --pattern 'core-os-iso-*' --dir dl
-            unzip -o -q "dl/"*"/core-os-"*".iso" -d dl
-            mv dl/core-os-*.iso core-os-live.iso
+            mv dl/*/core-os-*.iso core-os-live.iso
             echo "ISO obtenida del artefacto."
           elif gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
                --pattern '*.iso' --dir dl 2>/dev/null; then
