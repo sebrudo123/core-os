@@ -37,7 +37,9 @@ on:
 
 concurrency:
   group: live-preview
-  cancel-in-progress: true
+  # Varias sesiones pueden convivir: así se puede diagnosticar una ISO nueva sin
+  # cerrar la sesión que el usuario esté viendo.
+  cancel-in-progress: false
 
 permissions:
   contents: read
