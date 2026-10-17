@@ -1,8 +1,9 @@
 # Core OS
 
-> Sistema operativo personalizado basado en **Ubuntu 24.04 LTS (Noble Numbat)**,
-> con personalización automatizada (Cubic / scripts de chroot), pipeline CI/CD
-> en GitHub Actions y un **Modo Demo Web** estilo CasaOS para administradores.
+> Sistema operativo **propio** basado en **Ubuntu 24.04 LTS (Noble Numbat)** con
+> una identidad y un escritorio originales (experiencia tipo **Windows 11**),
+> personalización automatizada (Cubic / scripts de chroot), pipeline CI/CD en
+> GitHub Actions y un **Modo Demo Web** estilo CasaOS para administradores.
 
 [![Build ISO](https://github.com/sebrudo123/core-os/actions/workflows/build-iso.yml/badge.svg)](../../actions/workflows/build-iso.yml)
 [![CI](https://github.com/sebrudo123/core-os/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
@@ -12,10 +13,11 @@
 
 ## ¿Qué es Core OS?
 
-**Core OS** es una distribución derivada de Ubuntu pensada para administradores de
-infraestructura: arranca con un escritorio limpio, herramientas de sistema ya
-instaladas y un **panel de administración web** ("Modo Demo") que muestra el
-estado del sistema, métricas, historial de compilaciones y una terminal segura.
+**Core OS** es una distribución completa con identidad propia (no una simple
+copia de Ubuntu): arranca con pantalla de bienvenida, tema de arranque y
+escritorio propios, y viene con herramientas de administración ya instaladas
+junto a un **panel de administración web** ("Modo Demo") que muestra el estado
+del sistema, métricas, historial de compilaciones y una terminal segura.
 
 El proyecto vive en dos grandes bloques:
 
@@ -23,6 +25,26 @@ El proyecto vive en dos grandes bloques:
 | --- | --- | --- |
 | **Personalización del SO** | [`customization/`](./customization) | Paquetes, tema, branding, scripts de post-instalación, autoinstall y el constructor de la ISO. |
 | **Modo Demo Web** | [`web-demo/`](./web-demo) | El **panel de administración** de Core OS. Se instala dentro del SO (servicio systemd) y se despliega también en la web para previsualizarlo. |
+
+---
+
+## Identidad de escritorio (estilo Windows 11)
+
+Core OS no usa el escritorio de Ubuntu tal cual: le da su propia personalidad.
+
+| Elemento | Qué hace Core OS |
+| --- | --- |
+| **Menú de arranque (GRUB)** | Tema propio con logo, fondo y el nombre **Core OS**. |
+| **Splash de arranque (Plymouth)** | Logo animado de Core OS durante el inicio. |
+| **Inicio de sesión (GDM)** | Logo y fondo de Core OS, tema oscuro. |
+| **Escritorio** | Tema oscuro, iconos y acento de Core OS. |
+| **Barra de tareas** | Centrada, **abajo**, botón "Inicio" (menú de aplicaciones) y apps ancladas: experiencia tipo Windows 11. |
+| **App Store** | GNOME Software + Flatpak (sin la tienda de Ubuntu). |
+| **Sin rastros de Ubuntu** | Sin telemetría, *onboarding* ni marca de Ubuntu; `os-release`, `issue`, `motd` y logo son de Core OS. |
+| **Extras** | Acceso directo al Panel, Centro de bienvenida y Ajustes de Core OS. |
+
+Los recursos gráficos (logo, fondo de GRUB, splash) se generan por código, sin
+dependencias, con `customization/branding/tools/generate-assets.mjs`.
 
 ---
 
@@ -38,10 +60,13 @@ core-os/
 ├── customization/
 │   ├── packages/                # Listas de paquetes a instalar / eliminar
 │   ├── scripts/                 # Scripts de post-instalación (orden 00..99)
+│   │   ├── 25-desktop-shell.sh  # Escritorio propio (barra tipo Windows 11)
+│   │   └── 35-debrand-ubuntu.sh # GRUB/Plymouth/GDM con identidad Core OS
 │   ├── systemd/                 # Unidades systemd (panel web)
 │   ├── gnome/                   # dconf + extensiones de GNOME
 │   ├── kde/                     # Perfil de Plasma (opcional)
-│   ├── branding/                # Logos, wallpapers, identidad
+│   ├── branding/                # Logos, wallpapers, GRUB, Plymouth y generador
+│   │   └── tools/               # generate-assets.mjs (PNG sin dependencias)
 │   ├── autoinstall/             # user-data / meta-data (Ubuntu Autoinstall)
 │   ├── cubic/                   # Guía y hooks para Cubic
 │   ├── iso-tools/               # Helpers de empaquetado (squashfs/xorriso)

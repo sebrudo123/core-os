@@ -21,3 +21,14 @@ simple-scan
 gnome-contacts
 gnome-maps
 gnome-weather
+
+# Rastros y telemetría de Ubuntu (Core OS es su propia identidad)
+ubuntu-report
+popularity-contest
+apport
+apport-symptoms
+whoopsie
+ubuntu-advantage-tools
+ubuntu-pro-client
+ubuntu-docs
+ubuntu-wallpapers

@@ -1,0 +1,45 @@
+# ===========================================================================
+#  Tema de arranque (GRUB2) de Core OS
+#  Se instala en /boot/grub/themes/core-os/  (ver scripts/35-debrand-ubuntu.sh)
+# ===========================================================================
+
+title-text: "Core OS"
+title-color: "#dbe4f5"
+title-font: "Unifont Regular 24"
+
+desktop-image: "background.png"
+desktop-color: "#0b1220"
+
+terminal-font: "Unifont Regular 16"
+terminal-left: "15%"
+terminal-top: "20%"
+terminal-width: "70%"
+terminal-height: "60%"
+terminal-border: "1"
+
++ boot_menu {
+  left = 18%
+  top = 32%
+  width = 64%
+  height = 52%
+  item_font = "Unifont Regular 16"
+  item_color = "#c7d2e6"
+  selected_item_color = "#38bdf8"
+  item_height = 32
+  item_padding = 8
+  item_spacing = 8
+  icon_width = 0
+  icon_height = 0
+  scrollbar = true
+  scrollbar_width = 8
+}
+
++ label {
+  top = 90%
+  left = 0
+  width = 100%
+  align = "center"
+  color = "#7f92b4"
+  font = "Unifont Regular 10"
+  text = "↑/↓ seleccionar   ·   Enter arrancar   ·   'e' editar"
+}

@@ -70,6 +70,20 @@ fonts-noto-color-emoji
 language-pack-es
 language-pack-es-base
 
+# --- Escritorio propio de Core OS (identidad tipo Windows 11) ---
+# Arranque, splash e identidad visual
+plymouth
+plymouth-themes
+desktop-file-utils
+xdg-utils
+zenity
+dconf-cli
+libglib2.0-bin
+# Tienda de aplicaciones (estilo Microsoft Store) con Flatpak
+flatpak
+gnome-software
+gnome-software-plugin-flatpak
+
 # --- Core OS propio (paquetes .deb locales, ver scripts/40) ---
 # core-os-admin
 # core-os-branding

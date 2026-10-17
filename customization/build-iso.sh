@@ -284,10 +284,24 @@ extract_iso() {
   log "Extrayendo el árbol de la ISO..."
   rm -rf "$ISO_TREE"
   mkdir -p "$ISO_TREE"
-  # xorriso extrae sin necesidad de montar (no requiere privilegios).
-  xorriso -osirrox on -indev "$ISO_FILE" -extract / "$ISO_TREE" \
-    2>&1 | sed 's/^/[xorriso] /' | tail -n 3
-  chmod -R u+w "$ISO_TREE"
+  local mnt="$WORK_DIR/mnt"
+  mkdir -p "$mnt"
+
+  # Montar la ISO y copiar el árbol es lo más fiable (xorriso -extract puede
+  # corromper archivos squashfs grandes). Si no hay privilegios, se usa xorriso.
+  if mount -o loop,ro "$ISO_FILE" "$mnt" 2>/dev/null; then
+    ISO_MOUNTED=1
+    log "ISO montada en $mnt; copiando el árbol..."
+    rsync -a "$mnt/" "$ISO_TREE/" >/dev/null 2>&1 || cp -a "$mnt/." "$ISO_TREE/"
+    umount "$mnt" 2>/dev/null || umount -l "$mnt" 2>/dev/null || true
+    ISO_MOUNTED=0
+  else
+    warn "no se pudo montar la ISO (¿entorno sin privilegios?); usando xorriso"
+    xorriso -osirrox on -indev "$ISO_FILE" -extract / "$ISO_TREE" \
+      2>&1 | sed 's/^/[xorriso] /' | tail -n 3
+  fi
+
+  chmod -R u+w "$ISO_TREE" 2>/dev/null || true
   detect_squashfs
   [ -f "$ISO_TREE/$SQUASHFS_REL" ] || die "no se encontró $SQUASHFS_REL en la ISO"
   ok "Árbol de la ISO extraído"
@@ -306,6 +320,7 @@ extract_squashfs() {
 # Chroot: montajes y aplicación de la personalización
 # ---------------------------------------------------------------------------
 MOUNTS=()
+ISO_MOUNTED=0
 setup_chroot_mounts() {
   log "Preparando el chroot..."
   mkdir -p "$EDIT_TREE"/{proc,sys,dev,dev/pts,run}
@@ -332,10 +347,13 @@ teardown_chroot_mounts() {
 }
 
 cleanup() {
+  if [ "$ISO_MOUNTED" -eq 1 ]; then
+    umount "$WORK_DIR/mnt" 2>/dev/null || umount -l "$WORK_DIR/mnt" 2>/dev/null || true
+  fi
   teardown_chroot_mounts
   if [ "$KEEP" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
     log "Limpiando directorios temporales (usa -k para conservarlos)..."
-    rm -rf "$WORK_DIR/iso" "$WORK_DIR/edit" 2>/dev/null || true
+    rm -rf "${WORK_DIR:?}/iso" "${WORK_DIR:?}/edit" "${WORK_DIR:?}/mnt" 2>/dev/null || true
   fi
 }
 trap cleanup EXIT

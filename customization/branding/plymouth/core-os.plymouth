@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Core OS
+Description=Splash de arranque de Core OS
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/core-os
+ScriptFile=/usr/share/plymouth/themes/core-os/core-os.script

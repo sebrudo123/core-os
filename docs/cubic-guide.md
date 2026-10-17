@@ -93,10 +93,29 @@ sudo ./customization/build-iso.sh --keep          # conserva work/ y edit/
 | Síntoma | Causa probable / solución |
 | --- | --- |
 | `xorriso no generó la ISO` | Rutas de arranque distintas en tu release de Ubuntu; revisa `boot/grub/i386-pc/eltorito.img` y `EFI/boot/bootx64.efi`. |
+| Descarga con `404 Not Found` | El *point release* ya no está en `releases.ubuntu.com`. `build-iso.sh` detecta la ISO más reciente automáticamente; si falla, pásala con `--url`. |
+| `no se encontró casper/filesystem.squashfs` | Es una imagen **por capas** (Ubuntu 24.04.x). Ver la nota más abajo. |
 | `no se pudo montar /proc` | Entorno sin privilegios (contenedor). Usa una VM o `--dry-run`. |
 | ISO no arranca | Verifica `--grub2-boot-info` y `-isohybrid-gpt-basdat`; comprueba con `qemu-system-x86_64 -cdrom ...`. |
-| Build lenta | `mksquashfs -comp gzip` es más rápido que `xz` (edita la línea en `build-iso.sh`). |
-| Sin espacio | La build necesita ~15-20 GB libres. |
+| Build lenta | `--comp gzip` es más rápido que `xz` (menor ratio de compresión). |
+| Sin espacio | La build necesita ~15-25 GB libres. |
+
+## Nota: imágenes de Ubuntu 24.04 "por capas"
+
+Desde 24.04.x, las ISOs de Ubuntu usan un formato **`fsimage-layered`**: en
+`casper/` hay una capa base autocontenida y varias capas adicionales que se
+superponen en el arranque (escritorio completo, idiomas, *secure boot*).
+
+| Imagen | Capa base editable |
+| --- | --- |
+| Ubuntu Desktop 24.04 | `casper/minimal.squashfs` |
+| Ubuntu Server 24.04 | `casper/ubuntu-server-minimal.squashfs` |
+| Ubuntu ≤ 22.04 (clásico) | `casper/filesystem.squashfs` |
+
+`build-iso.sh` **detecta el formato automáticamente** y remasteriza la capa base
+(que es una rootfs completa y arrancable). Las capas superiores siguen
+aplicándose en el arranque, por lo que la personalización de Core OS en `/etc`,
+`/opt`, `/usr/lib` y los servicios systemd se conserva.
 
 ## Validar la ISO generada
 
