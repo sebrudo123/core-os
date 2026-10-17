@@ -36,10 +36,9 @@ on:
         options: [uefi, bios]
 
 concurrency:
-  group: live-preview
-  # Varias sesiones pueden convivir: así se puede diagnosticar una ISO nueva sin
-  # cerrar la sesión que el usuario esté viendo.
-  cancel-in-progress: false
+  # Cada sesión va por su cuenta: así se puede diagnosticar una ISO nueva sin
+  # cerrar la sesión que el usuario esté viendo (y sin esperar a que termine).
+  group: live-preview-${{ github.run_id }}
 
 permissions:
   contents: read
