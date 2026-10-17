@@ -415,7 +415,16 @@ def install(opts):
                             input=f"{user}:{password}\n", capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError("No se pudo establecer la contraseña del usuario")
-    in_target(f"chage -d \"$(date +%Y-%m-%d)\" -m 0 -M 99999 -I -1 -E -1 {user}")
+    # Caducidad de la cuenta y de la contraseña: sin límites.
+    #   · no se usa «-m» porque este chage del medio en vivo no lo admite (los
+    #     días mínimos ya valen 0 por defecto),
+    #   · y si aun así fallara, no se aborta: es un ajuste cosmético y la
+    #     instalación no debe perderse por él.
+    in_target(
+        f"chage -d \"$(date +%Y-%m-%d)\" -M 99999 -I -1 -E -1 {user} "
+        "|| echo 'aviso: no se pudo ajustar la caducidad de la cuenta'",
+        check=False,
+    )
     in_target("install -d -m 0755 /etc/sudoers.d")
     in_target("printf '# Core OS — el grupo wheel administra el sistema.\\n"
               "%%wheel ALL=(ALL:ALL) ALL\\n' > /etc/sudoers.d/10-core-os")
