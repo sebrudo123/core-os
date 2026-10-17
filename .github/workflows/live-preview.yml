@@ -4,6 +4,9 @@ name: Live Preview (escritorio en vivo por VNC)
 # navegador mediante noVNC + un túnel público. Permite ver e INTERACTUAR con
 # el escritorio de verdad (ratón/teclado) sin instalar nada.
 #
+# Además captura screenshots de la pantalla y los publica en <túnel>/shots/
+# para poder diagnosticar el arranque (o ver la pantalla sin VNC).
+#
 # La sesión es efímera: dura lo que indique el input "minutes".
 
 on:
@@ -32,7 +35,6 @@ permissions:
 jobs:
   live:
     runs-on: ubuntu-24.04
-    # Se mantiene viva hasta el máximo práctico del runner.
     timeout-minutes: 350
 
     steps:
@@ -43,11 +45,12 @@ jobs:
           sudo apt-get clean
           df -h /
 
-      - name: Instalar QEMU, noVNC y websockify
+      - name: Instalar QEMU, noVNC, websockify y utilidades
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-utils novnc websockify curl ca-certificates
+            qemu-system-x86 qemu-utils novnc websockify curl ca-certificates \
+            socat imagemagick
 
       - name: Habilitar KVM (aceleración por hardware)
         run: |
@@ -67,7 +70,6 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --pattern 'core-os-part-*' --dir parts
           cat parts/core-os-part-*.part > core-os-live.iso
           ls -lh core-os-live.iso
-          echo "ISO_SIZE=$(stat -c%s core-os-live.iso)" >> "$GITHUB_ENV"
 
       - name: Arrancar la VM con VNC
         run: |
@@ -81,6 +83,7 @@ jobs:
             -m "${{ github.event.inputs.memory }}" \
             -vga std -display none \
             -vnc :0 \
+            -monitor unix:/tmp/mon.sock,server,nowait \
             -rtc base=utc \
             -device qemu-xhci -device usb-tablet \
             -netdev user,id=n0 -device e1000,netdev=n0 \
@@ -92,16 +95,36 @@ jobs:
           echo "QEMU arrancado (pid $(cat /tmp/qemu.pid))"
           tail -5 /tmp/qemu.log || true
 
-      - name: Arrancar noVNC (websockify) y el túnel público
+      - name: Arrancar noVNC, túnel y captura de pantalla
         id: tunnel
         run: |
           set -euo pipefail
-          # noVNC sirviendo la web y el endpoint WebSocket en :6080 -> VNC :5900
           nohup websockify --web=/usr/share/novnc 6080 localhost:5900 \
             > /tmp/websockify.log 2>&1 &
           sleep 2
           curl -fsS -o /dev/null "http://localhost:6080/vnc.html" \
             && echo "noVNC respondiendo en local" || echo "AVISO: noVNC no responde aún"
+
+          # Captura de pantalla periódica (se sirve en <túnel>/shots/latest.png)
+          sudo mkdir -p /usr/share/novnc/shots
+          sudo chown "$USER" /usr/share/novnc/shots
+          cat > /tmp/capture.sh <<'EOS'
+          #!/usr/bin/env bash
+          i=0
+          while :; do
+            i=$((i+1))
+            printf 'screendump /tmp/shot.ppm\n' | socat - UNIX-CONNECT:/tmp/mon.sock >/dev/null 2>&1 || true
+            sleep 1
+            if [ -f /tmp/shot.ppm ]; then
+              convert /tmp/shot.ppm /usr/share/novnc/shots/latest.png 2>/dev/null || true
+              cp -f /usr/share/novnc/shots/latest.png "/usr/share/novnc/shots/shot-$(printf '%03d' $i).png" 2>/dev/null || true
+              rm -f /tmp/shot.ppm
+            fi
+            sleep 4
+          done
+          EOS
+          chmod +x /tmp/capture.sh
+          nohup /tmp/capture.sh > /tmp/capture.log 2>&1 &
 
           # cloudflared: túnel HTTPS público (soporta WebSocket)
           curl -fsSL -o /tmp/cloudflared.deb \
@@ -124,26 +147,22 @@ jobs:
           fi
 
           NOVNC="${URL}/vnc.html?autoconnect=1&resize=scale&path=websockify&show_dot=1"
-          echo "tunnel_url=$URL" >> "$GITHUB_OUTPUT"
           echo "novnc_url=$NOVNC" >> "$GITHUB_OUTPUT"
+          echo "tunnel_url=$URL" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$NOVNC" > live-url.txt
           printf '%s\n' "$URL" > tunnel-url.txt
 
           {
             echo "### 🖥️ Core OS — escritorio en vivo (VNC)"
             echo ""
-            echo "**Abre este enlace en el navegador e interactúa:**"
-            echo ""
-            echo "👉 ${NOVNC}"
-            echo ""
-            echo "- Arranca la ISO real (${ISO_SIZE} bytes) en QEMU."
-            echo "- Ratón y teclado funcionan directamente en el navegador."
-            echo "- Sesión efímera: se cierra al terminar el job (~${{ github.event.inputs.minutes }} min)."
+            echo "- **Interactuar:** ${NOVNC}"
+            echo "- **Captura actual:** ${URL}/shots/latest.png"
+            echo "- Sesión efímera (~${{ github.event.inputs.minutes }} min)."
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "=================================================="
-          echo "ENLACE EN VIVO (noVNC):"
-          echo "$NOVNC"
+          echo "ENLACE EN VIVO (noVNC): $NOVNC"
+          echo "CAPTURA ACTUAL:         $URL/shots/latest.png"
           echo "=================================================="
 
       - name: Publicar el enlace como artefacto (recuperable por API)
@@ -158,7 +177,7 @@ jobs:
       - name: Mantener la sesión en vivo
         run: |
           echo "Sesión en vivo activa. Se cerrará en ${{ github.event.inputs.minutes }} min."
-          for i in $(seq 1 "${{ github.event.inputs.minutes }}"); do
+          for _ in $(seq 1 "${{ github.event.inputs.minutes }}"); do
             if ! kill -0 "$(cat /tmp/qemu.pid)" 2>/dev/null; then
               echo "La VM terminó antes de lo previsto."; tail -20 /tmp/qemu.log; exit 0
             fi
@@ -172,3 +191,4 @@ jobs:
           echo "=== qemu.log ==="; tail -20 /tmp/qemu.log 2>/dev/null || true
           echo "=== websockify.log ==="; tail -10 /tmp/websockify.log 2>/dev/null || true
           echo "=== cloudflared.log ==="; tail -10 /tmp/cloudflared.log 2>/dev/null || true
+          echo "=== capture.log ==="; tail -5 /tmp/capture.log 2>/dev/null || true
