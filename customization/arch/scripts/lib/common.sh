@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # las variables se usan desde los demás scripts
 # ===========================================================================
 #  Core OS — funciones comunes de los scripts de personalización.
 #
