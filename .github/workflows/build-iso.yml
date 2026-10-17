@@ -142,11 +142,11 @@ jobs:
       - name: Generar checksums
         run: |
           cd customization/out
-          # El árbol lo crea root al construir con sudo; se generan como root y
-          # se devuelve la propiedad al usuario del runner.
+          # El árbol lo crea root al construir con sudo; se generan los checksums
+          # como root y se devuelve la propiedad del directorio al runner para
+          # poder dividir/subir la ISO más adelante.
           sudo sh -c 'sha256sum ./*.iso > SHA256SUMS'
-          sudo chown "$USER" SHA256SUMS 2>/dev/null || true
-          sudo chown "$USER" ./*.iso 2>/dev/null || true
+          sudo chown -R "$USER" . 2>/dev/null || true
           cat SHA256SUMS
 
       # Nota: una ISO de ~6 GB supera la cuota de artefactos de GitHub para
