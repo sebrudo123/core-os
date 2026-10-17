@@ -28,6 +28,10 @@ on:
         description: 'Memoria de la máquina virtual (MB)'
         required: true
         default: '6144'
+      disk:
+        description: 'Disco duro virtual para instalar Core OS dentro de la vista previa (0 = sin disco)'
+        required: true
+        default: '24G'
       firmware:
         description: 'Firmware de arranque (uefi muestra el menú de Core OS)'
         required: true
@@ -129,6 +133,20 @@ jobs:
             echo "Sin OVMF: arranque BIOS."
           fi
 
+          # Disco duro virtual: el instalador necesita un disco real, así que la
+          # vista previa incluye uno. El primer arranque es desde la ISO y los
+          # siguientes desde el disco, de forma que al reiniciar tras instalar
+          # se puede ver el Core OS ya instalado.
+          DISCO=/tmp/core-os-disco.qcow2
+          DISCO_ARGS=()
+          ARRANQUE="order=d"
+          if [ "${{ inputs.disk }}" != "0" ]; then
+            qemu-img create -f qcow2 "$DISCO" "${{ inputs.disk }}" >/dev/null
+            DISCO_ARGS=(-drive "file=$DISCO,format=qcow2,if=virtio,cache=writeback")
+            ARRANQUE="order=c,once=d"
+            echo "Disco de instalación: $DISCO (${{ inputs.disk }})"
+          fi
+
           qemu-system-x86_64 \
             -name "Core OS Live" \
             -accel "$ACCEL" -cpu "$CPU" -smp 4 \
@@ -140,8 +158,9 @@ jobs:
             -rtc base=utc \
             -device qemu-xhci -device usb-tablet \
             -netdev user,id=n0 -device e1000,netdev=n0 \
+            "${DISCO_ARGS[@]}" \
             "${FW_ARGS[@]}" \
-            -boot order=d \
+            -boot "$ARRANQUE" \
             -drive file=core-os-live.iso,media=cdrom,readonly=on \
             > /tmp/qemu.log 2>&1 &
           echo $! > /tmp/qemu.pid
