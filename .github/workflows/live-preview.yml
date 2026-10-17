@@ -135,7 +135,7 @@ jobs:
             -vga std -display none \
             -vnc :0 \
             -monitor unix:/tmp/mon.sock,server,nowait \
-            -serial file:/tmp/serial.log \
+            -chardev pty,id=ser0,logfile=/tmp/serial.log -serial chardev:ser0 \
             -rtc base=utc \
             -device qemu-xhci -device usb-tablet \
             -netdev user,id=n0 -device e1000,netdev=n0 \
@@ -220,6 +220,44 @@ jobs:
             live-url.txt
             tunnel-url.txt
           retention-days: 1
+
+      - name: Diagnóstico del escritorio (consola serie)
+        run: |
+          # Core OS arranca en vivo con autologin de root en la consola serie, y
+          # QEMU la deja accesible por un pty. Eso permite leer el diario del
+          # sistema y probar cambios en caliente sin rehacer la ISO.
+          set -uo pipefail
+          SHOTS=/usr/share/novnc/shots
+          sudo mkdir -p "$SHOTS"
+          sudo chown "$USER" "$SHOTS"
+          PTY="$(sed -n 's/.*char device redirected to \(\/dev\/pts\/[0-9]*\).*/\1/p' \
+            /tmp/qemu.log | head -1)"
+          if [ -z "$PTY" ]; then
+            echo "No se pudo abrir la consola serie." > "$SHOTS/diag.txt"
+            echo "AVISO: consola serie no disponible"
+            exit 0
+          fi
+          echo "Consola serie en $PTY"
+          stty -F "$PTY" 115200 raw -echo 2>/dev/null || true
+
+          enviar() { printf '%s\n' "$1" > "$PTY"; sleep 6; }
+
+          enviar 'echo "===== DIAGNOSTICO CORE OS ====="'
+          enviar 'systemctl --no-pager --failed || true'
+          enviar 'loginctl list-sessions --no-legend || true'
+          enviar 'ls -l /dev/dri 2>&1 || true'
+          enviar 'journalctl -b -u gdm.service --no-pager 2>&1 | tail -60'
+          enviar 'journalctl -b --no-pager 2>&1 | grep -iE "gnome-shell|mutter|gnome-session|wayland|Xorg|x-session|gdm" | tail -60'
+          enviar 'journalctl -b -p err --no-pager 2>&1 | tail -30'
+          enviar 'echo "===== PRUEBA: SESION DE XORG ====="'
+          enviar 'printf "[daemon]\nWaylandEnable=false\nAutomaticLoginEnable=true\nAutomaticLogin=core\n" > /etc/gdm/custom.conf'
+          enviar 'systemctl restart gdm'
+          sleep 45
+          enviar 'loginctl list-sessions --no-legend || true'
+          enviar 'journalctl -b -u gdm.service --no-pager 2>&1 | tail -20'
+          enviar 'echo "===== FIN DEL DIAGNOSTICO ====="'
+          cp -f /tmp/serial.log "$SHOTS/diag.txt" 2>/dev/null || true
+          echo "Diagnóstico completado (queda en ${SHOTS}/diag.txt)"
 
       - name: Sesión en vivo (capturas periódicas)
         run: |

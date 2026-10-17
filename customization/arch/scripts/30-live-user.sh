@@ -51,6 +51,9 @@ cat > /etc/gdm/custom.conf <<EOF
 # El MEDIO EN VIVO entra solo con el usuario ${CORE_OS_LIVE_USER}.
 # El instalador deja este archivo sin autologin en el sistema final.
 [daemon]
+# Se usa la sesión de Xorg: funciona en cualquier equipo y en máquinas
+# virtuales, donde la sesión de Wayland depende del controlador gráfico.
+WaylandEnable=false
 AutomaticLoginEnable=true
 AutomaticLogin=${CORE_OS_LIVE_USER}
 
