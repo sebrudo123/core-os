@@ -126,6 +126,8 @@ jobs:
           NOVNC="${URL}/vnc.html?autoconnect=1&resize=scale&path=websockify&show_dot=1"
           echo "tunnel_url=$URL" >> "$GITHUB_OUTPUT"
           echo "novnc_url=$NOVNC" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$NOVNC" > live-url.txt
+          printf '%s\n' "$URL" > tunnel-url.txt
 
           {
             echo "### 🖥️ Core OS — escritorio en vivo (VNC)"
@@ -143,6 +145,15 @@ jobs:
           echo "ENLACE EN VIVO (noVNC):"
           echo "$NOVNC"
           echo "=================================================="
+
+      - name: Publicar el enlace como artefacto (recuperable por API)
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-url
+          path: |
+            live-url.txt
+            tunnel-url.txt
+          retention-days: 1
 
       - name: Mantener la sesión en vivo
         run: |
