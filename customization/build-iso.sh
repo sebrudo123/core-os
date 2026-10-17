@@ -87,10 +87,51 @@ parse_args() {
 }
 
 # ---------------------------------------------------------------------------
+# Resolución de la URL de la ISO base
+# ---------------------------------------------------------------------------
+# Descubre la ISO de escritorio más reciente del release indicado, en lugar de
+# asumir un point release concreto (que cambia con el tiempo y provoca 404).
+resolve_iso_url() {
+  local base="https://releases.ubuntu.com/${UBUNTU_RELEASE}/"
+  local listing=""
+
+  if command -v wget >/dev/null 2>&1; then
+    listing="$(wget -qO- "$base" 2>/dev/null || true)"
+  elif command -v curl >/dev/null 2>&1; then
+    listing="$(curl -fsSL "$base" 2>/dev/null || true)"
+  fi
+
+  local candidate
+  candidate="$(printf '%s' "$listing" \
+    | grep -oE "ubuntu-${UBUNTU_RELEASE}(\.[0-9]+)?-desktop-amd64\.iso" \
+    | sort -u | sort -V | tail -1)"
+
+  if [ -n "$candidate" ]; then
+    ISO_URL="${base}${candidate}"
+    log "ISO base detectada automáticamente: ${candidate}"
+    return 0
+  fi
+
+  # Fallback: prueba candidatos de point release conocidos.
+  local p name
+  for p in 4 3 2 1; do
+    name="ubuntu-${UBUNTU_RELEASE}.${p}-desktop-amd64.iso"
+    if command -v curl >/dev/null 2>&1 && curl -fsI "${base}${name}" >/dev/null 2>&1; then
+      ISO_URL="${base}${name}"
+      log "ISO base (fallback) detectada: ${name}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 # Resolución de rutas derivadas
 # ---------------------------------------------------------------------------
 resolve_paths() {
-  [ -n "$ISO_URL" ] || ISO_URL="https://releases.ubuntu.com/${UBUNTU_RELEASE}/ubuntu-${UBUNTU_RELEASE}.${UBUNTU_POINT}-desktop-amd64.iso"
+  if [ -z "$ISO_URL" ]; then
+    resolve_iso_url || ISO_URL="https://releases.ubuntu.com/${UBUNTU_RELEASE}/ubuntu-${UBUNTU_RELEASE}.${UBUNTU_POINT}-desktop-amd64.iso"
+  fi
 
   ISO_FILE="$CACHE_DIR/$(basename "$ISO_URL")"
   ISO_TREE="$WORK_DIR/iso"
@@ -141,21 +182,48 @@ validate_customization() {
 # ---------------------------------------------------------------------------
 download_base_iso() {
   if [ -f "$ISO_FILE" ]; then
-    ok "ISO base ya en caché: $ISO_FILE"
-    return 0
+    local cached_size
+    cached_size=$(stat -c%s "$ISO_FILE" 2>/dev/null || echo 0)
+    if [ "$cached_size" -gt 500000000 ]; then
+      ok "ISO base ya en caché: $ISO_FILE"
+      return 0
+    fi
+    warn "la ISO en caché parece incompleta/corrupta; se descargará de nuevo"
+    rm -f "$ISO_FILE"
   fi
+
   if [ "$NO_DOWNLOAD" -eq 1 ]; then
     die "no hay ISO en caché ($ISO_FILE) y se pasó --no-download"
   fi
+
   log "Descargando ISO base: $ISO_URL"
   mkdir -p "$CACHE_DIR"
+  rm -f "${ISO_FILE}.part"
+
+  local rc=0
   if command -v wget >/dev/null 2>&1; then
-    wget -c -O "${ISO_FILE}.part" "$ISO_URL"
+    wget -c -O "${ISO_FILE}.part" "$ISO_URL" || rc=$?
   else
-    curl -L --fail -C - -o "${ISO_FILE}.part" "$ISO_URL"
+    curl -L --fail -C - -o "${ISO_FILE}.part" "$ISO_URL" || rc=$?
   fi
+
+  if [ "$rc" -ne 0 ] || [ ! -s "${ISO_FILE}.part" ]; then
+    rm -f "${ISO_FILE}.part"
+    die "no se pudo descargar la ISO desde $ISO_URL
+  Comprueba la URL con --url o revisa la conexión. (¿Point release retirado?)"
+  fi
+
+  # Verifica que sea una ISO real (evita páginas de error HTML).
+  local size
+  size=$(stat -c%s "${ISO_FILE}.part" 2>/dev/null || echo 0)
+  if [ "$size" -lt 500000000 ]; then
+    rm -f "${ISO_FILE}.part"
+    die "la descarga ($(du -h "${ISO_FILE}.part" 2>/dev/null | cut -f1)) no parece una ISO válida.
+  Revisa la URL con --url."
+  fi
+
   mv "${ISO_FILE}.part" "$ISO_FILE"
-  ok "ISO base descargada"
+  ok "ISO base descargada ($(du -h "$ISO_FILE" | cut -f1))"
 }
 
 # ---------------------------------------------------------------------------

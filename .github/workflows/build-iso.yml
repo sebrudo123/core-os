@@ -100,14 +100,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Libera espacio: los runners traen ~14GB útiles y la ISO necesita más.
+      # Libera espacio: los runners traen ~14GB útiles y una ISO de escritorio
+      # necesita ~30GB (ISO + árbol extraído + squashfs). Se eliminan los
+      # toolchains preinstalados que no usamos.
       - name: Liberar espacio en disco
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+          echo "Antes:"; df -h /
+          sudo rm -rf /usr/share/dotnet \
+                      /usr/local/lib/android \
+                      /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/boost \
+                      /usr/local/.ghcup \
+                      /usr/share/swift \
+                      /opt/az \
+                      /usr/local/lib/node_modules \
                       "$AGENT_TOOLSDIRECTORY" || true
           sudo apt-get clean
-          df -h /
+          sudo apt-get autoremove -y || true
+          sudo docker image prune -a -f 2>/dev/null || true
+          echo "Después:"; df -h /
 
       - name: Instalar dependencias de construcción
         run: |
