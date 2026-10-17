@@ -113,6 +113,7 @@ function validateDiskStep() {
   if (!state.disk) setStatus('Selecciona el disco donde instalar Core OS.');
   else if (!els.confirmErase.checked) setStatus('Marca la casilla para confirmar el borrado del disco.');
   else setStatus(`Se instalará en ${state.disk.device}.`);
+  return ok;
 }
 
 /* ------------------------------ cuenta ---------------------------------- */

@@ -394,7 +394,7 @@ def install(opts):
               "2>/dev/null || true", check=False)
     if uefi:
         in_target('grub-install --target=x86_64-efi --efi-directory=/boot/efi '
-                  '--bootloader-id="Core OS" --recheck')
+                  '--bootloader-id=CoreOS --recheck')
         # Ruta de respaldo del firmware (medios extraíbles)
         in_target('install -d -m 0755 /boot/efi/EFI/BOOT && '
                   'cp -f /boot/efi/EFI/CoreOS/grubx64.efi '
