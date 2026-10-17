@@ -439,6 +439,66 @@ repack_squashfs() {
   ok "$SQUASHFS_REL regenerado ($(du -h "$target" | cut -f1))"
 }
 
+# ---------------------------------------------------------------------------
+# Identidad de arranque en el árbol de la ISO (GRUB)
+# ---------------------------------------------------------------------------
+# El menú de arranque NO sale del squashfs, sino de boot/grub/grub.cfg dentro
+# del árbol de la ISO. Aquí se instala el tema de Core OS, se ajusta el menú y
+# se elimina el splash de Ubuntu para que el arranque sea de Core OS.
+brand_iso_tree() {
+  local theme_src="$CUSTOMIZATION_DIR/branding/grub"
+  local cfg="$ISO_TREE/boot/grub/grub.cfg"
+  local have_theme=0
+
+  if [ -f "$theme_src/theme.txt" ]; then
+    log "Instalando la identidad de arranque (GRUB) en la ISO..."
+    local theme_dir="$ISO_TREE/boot/grub/themes/core-os"
+    install -d "$theme_dir"
+    cp -a "$theme_src/." "$theme_dir/"
+    have_theme=1
+
+    # Fuente requerida por el tema (suele venir en la ISO de Ubuntu).
+    if [ ! -f "$ISO_TREE/boot/grub/fonts/unicode.pf2" ] && \
+       [ -f "$EDIT_TREE/usr/share/grub/unicode.pf2" ]; then
+      install -D "$EDIT_TREE/usr/share/grub/unicode.pf2" \
+        "$ISO_TREE/boot/grub/fonts/unicode.pf2"
+    fi
+  else
+    warn "no se encontró branding/grub/theme.txt; se omite el tema de arranque"
+  fi
+
+  if [ ! -f "$cfg" ]; then
+    warn "no se encontró $cfg en la ISO; no se puede ajustar el menú"
+    return 0
+  fi
+
+  [ -f "${cfg}.core-os.bak" ] || cp -f "$cfg" "${cfg}.core-os.bak"
+
+  local tmp="${cfg}.core-os.new"
+  {
+    echo '# === Core OS: tema y modo gráfico ==='
+    echo 'insmod all_video'
+    echo 'insmod gfxterm'
+    echo 'insmod png'
+    echo 'set gfxmode=1920x1080,1280x800,1024x768,auto'
+    echo 'set gfxpayload=keep'
+    echo 'terminal_output gfxterm'
+    if [ "$have_theme" -eq 1 ]; then
+      echo 'set theme=($root)/boot/grub/themes/core-os/theme.txt'
+    fi
+    echo 'set timeout=10'
+    echo ''
+    cat "${cfg}.core-os.bak"
+  } > "$tmp"
+  mv -f "$tmp" "$cfg"
+
+  # Identidad: renombra SOLO las entradas del menú (no toca rutas/labels).
+  sed -i '/^[[:space:]]*menuentry/ s/Ubuntu/Core OS/g' "$cfg" || true
+  # Quita el splash de Ubuntu (Plymouth del initrd) manteniendo "quiet".
+  sed -i 's/quiet splash/quiet/g' "$cfg" || true
+  ok "Identidad de arranque aplicada (Core OS)"
+}
+
 regenerate_checksums() {
   log "Regenerando md5sum.txt de la ISO..."
   ( cd "$ISO_TREE" && find . -type f -not -name 'md5sum.txt' -print0 \
@@ -514,6 +574,7 @@ main() {
   run_chroot_scripts
   teardown_chroot_mounts
   repack_squashfs
+  brand_iso_tree
   regenerate_checksums
 
   if [ "$PREPARE_ONLY" -eq 1 ]; then

@@ -1,0 +1,21 @@
+# ===========================================================================
+#  core-os-setupd.service — Servicio del asistente de instalación de Core OS.
+#  Expone la API local de instalación (127.0.0.1:8765) y se ejecuta como root
+#  para poder particionar y copiar el sistema.
+#
+#  Solo se activa en el MEDIO de instalación (live), no en el sistema
+#  instalado, gracias a ConditionKernelCommandLine.
+# ===========================================================================
+[Unit]
+Description=Core OS Setup (servicio de instalación)
+ConditionKernelCommandLine=boot=casper
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --server-only
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

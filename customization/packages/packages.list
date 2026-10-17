@@ -84,6 +84,14 @@ flatpak
 gnome-software
 gnome-software-plugin-flatpak
 
+# --- Asistente de instalación propio (estilo Windows 11) ---
+# Interfaz del instalador: GTK + WebKit2GTK (HTML/CSS/JS) y utilidades de disco.
+python3-gi
+gir1.2-gtk-3.0
+gir1.2-webkit2-4.1
+parted
+dosfstools
+
 # --- Core OS propio (paquetes .deb locales, ver scripts/40) ---
 # core-os-admin
 # core-os-branding

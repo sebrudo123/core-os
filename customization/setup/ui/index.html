@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Instalación de Core OS</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="setup">
+      <!-- Barra superior estilo Windows Setup -->
+      <header class="setup-bar">
+        <div class="setup-brand">
+          <span class="logo"></span>
+          <span>Instalación de Core OS</span>
+        </div>
+        <div class="setup-step" id="step-label">Paso 1 de 4</div>
+      </header>
+
+      <main class="setup-body">
+        <!-- PASO 1: idioma -->
+        <section class="page active" id="page-lang">
+          <h1>Configuración regional</h1>
+          <p class="lead">Elige el idioma y la distribución del teclado.</p>
+          <div class="form-grid">
+            <label>Idioma
+              <select id="lang">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>Distribución del teclado
+              <select id="layout">
+                <option value="es">Español (España)</option>
+                <option value="us">Inglés (EE. UU.)</option>
+                <option value="latam">Español (Latinoamérica)</option>
+              </select>
+            </label>
+            <label>Zona horaria
+              <select id="timezone">
+                <option value="Europe/Madrid">Europe/Madrid</option>
+                <option value="America/Mexico_City">America/Mexico_City</option>
+                <option value="America/Bogota">America/Bogota</option>
+                <option value="America/Lima">America/Lima</option>
+                <option value="America/Santiago">America/Santiago</option>
+                <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <!-- PASO 2: instalar ahora -->
+        <section class="page center" id="page-start">
+          <span class="big-logo"></span>
+          <h1>Core OS</h1>
+          <p class="lead">Un sistema operativo propio, rápido y a tu manera.</p>
+          <button class="btn primary big" id="btn-install-now">Instalar ahora</button>
+        </section>
+
+        <!-- PASO 3: disco -->
+        <section class="page" id="page-disk">
+          <h1>¿Dónde quieres instalar Core OS?</h1>
+          <p class="lead">
+            Se borrará todo el contenido del disco seleccionado.
+          </p>
+          <div class="disks" id="disk-list"></div>
+        </section>
+
+        <!-- PASO 4: cuenta -->
+        <section class="page" id="page-account">
+          <h1>Configuración de la cuenta</h1>
+          <p class="lead">Crea tu cuenta de administrador.</p>
+          <div class="form-grid">
+            <label>Nombre de usuario
+              <input id="user" value="coreadmin" autocomplete="off" />
+            </label>
+            <label>Contraseña
+              <input id="password" type="password" value="coreos" autocomplete="off" />
+            </label>
+            <label>Nombre del equipo
+              <input id="hostname" value="core-os" autocomplete="off" />
+            </label>
+          </div>
+        </section>
+
+        <!-- PROGRESO -->
+        <section class="page center" id="page-progress">
+          <h1 id="prog-title">Instalando Core OS</h1>
+          <div class="progress-wrap">
+            <div class="progress"><i id="prog-bar"></i></div>
+            <div class="progress-meta">
+              <span id="prog-pct">0%</span>
+              <span id="prog-msg">Preparando…</span>
+            </div>
+          </div>
+          <p class="slide" id="slide">Tu sistema, tus reglas.</p>
+          <details class="log-box">
+            <summary>Ver detalles técnicos</summary>
+            <pre id="log"></pre>
+          </details>
+        </section>
+
+        <!-- FIN -->
+        <section class="page center" id="page-done">
+          <span class="big-logo"></span>
+          <h1>¡Instalación completada!</h1>
+          <p class="lead">Core OS se reiniciará para finalizar la configuración.</p>
+          <button class="btn primary big" id="btn-reboot">Reiniciar ahora</button>
+        </section>
+
+        <!-- ERROR -->
+        <section class="page center" id="page-error">
+          <h1>No se pudo completar la instalación</h1>
+          <p class="lead" id="err-msg"></p>
+          <pre class="err-log" id="err-log"></pre>
+        </section>
+      </main>
+
+      <!-- Pie con botones estilo Windows -->
+      <footer class="setup-footer">
+        <button class="btn ghost" id="btn-back">Atrás</button>
+        <span class="spacer"></span>
+        <button class="btn primary" id="btn-next">Siguiente</button>
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

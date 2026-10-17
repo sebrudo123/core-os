@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# 50-installer.sh — instala el asistente de instalación de Core OS
+# (experiencia estilo Windows 11) que se muestra en la sesión en vivo.
+#
+# En el sistema instalado NO se muestra: el lanzador comprueba que estamos en
+# el medio de instalación (casper/live) antes de arrancar.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+# shellcheck source=lib/common.sh
+source "$(dirname "$0")/lib/common.sh"
+
+require_root
+export DEBIAN_FRONTEND=noninteractive
+
+SETUP_SRC="${CUSTOMIZATION_DIR}/setup"
+SETUP_DEST="/usr/lib/core-os/setup"
+
+[ -d "$SETUP_SRC" ] || die "no se encontró el asistente en $SETUP_SRC"
+
+log "Instalando el asistente de instalación de Core OS (estilo Windows 11)..."
+run install -d -m 0755 "$SETUP_DEST"
+run cp -a "$SETUP_SRC/." "$SETUP_DEST/"
+
+# --- Lanzador (solo en el medio en vivo) -----------------------------------
+cat > /usr/bin/core-os-setup <<'LAUNCHER'
+#!/usr/bin/env bash
+# El asistente solo se ejecuta desde el medio de instalación (live).
+if ! grep -qE 'boot=casper|casper' /proc/cmdline 2>/dev/null; then
+  # Señal secundaria: el árbol del medio suele incluir /cdrom.
+  [ -d /cdrom ] || exit 0
+fi
+# La ventana (usuario) apunta al servicio en segundo plano (root) que instala.
+exec /usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --ui-only "$@"
+LAUNCHER
+run chmod 0755 /usr/bin/core-os-setup
+
+# --- Servicio (root) que realiza la instalación ----------------------------
+# Solo se activa en el medio en vivo (ConditionKernelCommandLine).
+UNIT_SRC="${CUSTOMIZATION_DIR}/systemd/core-os-setupd.service"
+if [ -f "$UNIT_SRC" ]; then
+  log "Instalando el servicio del instalador (core-os-setupd.service)..."
+  run install -D -m 0644 "$UNIT_SRC" /etc/systemd/system/core-os-setupd.service
+  run systemctl enable core-os-setupd.service || warn "no se pudo habilitar core-os-setupd.service"
+else
+  warn "no se encontró $UNIT_SRC"
+fi
+
+# --- Autostart en la sesión en vivo ----------------------------------------
+run install -d -m 0755 /etc/xdg/autostart
+cat > /etc/xdg/autostart/core-os-setup.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Instalación de Core OS
+Comment=Asistente de instalación de Core OS
+Exec=/usr/bin/core-os-setup
+Terminal=false
+X-GNOME-Autostart-enabled=true
+EOF
+
+# --- Acceso manual desde el menú de aplicaciones ---------------------------
+run install -d -m 0755 /usr/share/applications
+cat > /usr/share/applications/core-os-setup.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Instalar Core OS
+Comment=Instala Core OS en el disco
+Exec=/usr/bin/core-os-setup
+Icon=/usr/share/pixmaps/core-os/core-os.png
+Terminal=false
+Categories=System;
+EOF
+
+# --- Desactiva el instalador de Ubuntu (Core OS usa el suyo) ---------------
+run rm -f /etc/xdg/autostart/ubiquity.desktop \
+          /etc/xdg/autostart/gnome-initial-setup.desktop 2>/dev/null || true
+
+log "50-installer.sh completado"

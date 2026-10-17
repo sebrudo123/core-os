@@ -61,6 +61,15 @@ jobs:
           test -s customization/packages/packages.list
           grep -vE '^\s*(#|$)' customization/packages/packages.list
 
+      - name: Validar el asistente de instalación
+        run: |
+          python3 -m py_compile customization/setup/core-os-setup.py
+          test -f customization/setup/ui/index.html
+          test -f customization/setup/ui/style.css
+          test -f customization/setup/ui/app.js
+          test -f customization/setup/ui/logo.png
+          echo "asistente de instalación OK"
+
   # ---------------------------------------------------------------------------
   # 2. Empaquetado de la personalización (artefacto ligero, siempre disponible)
   # ---------------------------------------------------------------------------

@@ -58,7 +58,9 @@ VERSION_ID="${CORE_OS_RELEASE}"
 VERSION="${CORE_OS_RELEASE} (${UBUNTU_CODENAME})"
 VERSION_CODENAME=${UBUNTU_CODENAME}
 ID=core-os
-ID_LIKE=ubuntu debian
+# OJO: con espacios debe ir entre comillas; cloud-init usa shlex.split y una
+# palabra suelta sin '=' rompe el parseo (ValueError en load_shell_content).
+ID_LIKE="ubuntu debian"
 HOME_URL="https://github.com/sebrudo123/core-os"
 SUPPORT_URL="https://github.com/sebrudo123/core-os/issues"
 UBUNTU_CODENAME=${UBUNTU_CODENAME}
@@ -67,9 +69,9 @@ rm -f /etc/os-release
 ln -sf ../usr/lib/os-release /etc/os-release
 
 cat > /etc/lsb-release <<EOF
-DISTRIB_ID=${CORE_OS_NAME}
-DISTRIB_RELEASE=${CORE_OS_RELEASE}
-DISTRIB_CODENAME=${UBUNTU_CODENAME}
+DISTRIB_ID="${CORE_OS_NAME}"
+DISTRIB_RELEASE="${CORE_OS_RELEASE}"
+DISTRIB_CODENAME="${UBUNTU_CODENAME}"
 DISTRIB_DESCRIPTION="${CORE_OS_NAME} ${CORE_OS_RELEASE}"
 EOF
 

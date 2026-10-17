@@ -1,0 +1,126 @@
+/* ==========================================================================
+   Core OS Setup — estilo Windows 11 (asistente del instalador)
+   ========================================================================== */
+:root {
+  --bg: #0b1220;
+  --bg2: #0f172a;
+  --card: #111c33;
+  --line: #23304a;
+  --text: #eef2fb;
+  --muted: #93a3c4;
+  --accent: #38bdf8;
+  --accent2: #2563eb;
+  --danger: #f87171;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Segoe UI", Ubuntu, system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  background: radial-gradient(1200px 700px at 60% -10%, #16274a 0%, var(--bg) 62%);
+  overflow: hidden;
+  user-select: none;
+}
+.setup { display: flex; flex-direction: column; height: 100vh; }
+
+/* Barra superior */
+.setup-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px clamp(20px, 4vw, 48px);
+  border-bottom: 1px solid rgba(148, 163, 184, .12);
+}
+.setup-brand { display: flex; align-items: center; gap: 12px; font-weight: 600; letter-spacing: .01em; }
+.logo, .big-logo {
+  display: inline-block; background: url("logo.png") center/contain no-repeat;
+}
+.logo { width: 26px; height: 26px; }
+.big-logo { width: 96px; height: 96px; }
+.setup-step { color: var(--muted); font-size: .88rem; }
+
+/* Cuerpo */
+.setup-body { flex: 1; position: relative; overflow: hidden; }
+.page {
+  position: absolute; inset: 0;
+  padding: clamp(24px, 5vw, 64px);
+  display: none; flex-direction: column; justify-content: center;
+}
+.page.active { display: flex; animation: fade .28s ease; }
+.page.center { align-items: center; text-align: center; }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+h1 { font-size: clamp(1.5rem, 2.6vw, 2.2rem); margin: 0 0 8px; font-weight: 650; }
+.lead { color: var(--muted); margin: 0 0 26px; font-size: 1rem; max-width: 46ch; }
+.page.center .lead { max-width: 52ch; }
+
+/* Formularios */
+.form-grid { display: grid; gap: 18px; max-width: 460px; }
+.form-grid label {
+  display: flex; flex-direction: column; gap: 7px;
+  font-size: .85rem; color: var(--muted);
+}
+select, input {
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 13px; font-size: .95rem; font-family: inherit;
+  outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+}
+select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.18); }
+
+/* Botones */
+.btn {
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+  padding: 10px 22px; font-size: .95rem; font-family: inherit;
+  transition: background .15s ease, transform .05s ease, opacity .15s;
+}
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #04121f; font-weight: 650; }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+.btn.ghost:hover { background: #16213a; }
+.btn.big { padding: 14px 44px; font-size: 1.05rem; margin-top: 8px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Discos */
+.disks { display: grid; gap: 10px; max-width: 720px; }
+.disk {
+  display: flex; align-items: center; gap: 14px;
+  padding: 15px 17px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); cursor: pointer; transition: border-color .15s, background .15s;
+}
+.disk:hover { border-color: #35507a; }
+.disk.sel { border-color: var(--accent); background: rgba(56,189,248,.10); }
+.disk .radio {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid #4a5f86; flex: 0 0 auto;
+}
+.disk.sel .radio { border-color: var(--accent); box-shadow: inset 0 0 0 4px var(--accent); }
+.disk .info { display: flex; flex-direction: column; gap: 2px; }
+.disk .name { font-weight: 600; }
+.disk .meta { color: var(--muted); font-size: .82rem; }
+
+/* Progreso */
+.progress-wrap { width: min(560px, 80%); margin: 18px 0 8px; }
+.progress { height: 8px; border-radius: 6px; background: #1b2740; overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width .35s ease; }
+.progress-meta { display: flex; justify-content: space-between; margin-top: 9px; color: var(--muted); font-size: .85rem; }
+.slide { margin-top: 22px; color: #b9c6e2; font-size: .95rem; min-height: 1.4em; }
+
+.log-box { margin-top: 26px; width: min(720px, 86%); text-align: left; }
+.log-box summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.log-box pre, .err-log {
+  margin: 10px 0 0; max-height: 190px; overflow: auto;
+  background: #070d18; border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px; font-size: .74rem; color: #9fb2d4; white-space: pre-wrap;
+}
+.err-log { color: #fca5a5; width: min(720px, 86%); }
+#err-msg { color: var(--danger); }
+
+/* Pie */
+.setup-footer {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px clamp(20px, 4vw, 48px);
+  border-top: 1px solid rgba(148, 163, 184, .12);
+  background: rgba(9, 14, 26, .7);
+}
+.spacer { flex: 1; }
+.hidden { display: none !important; }
