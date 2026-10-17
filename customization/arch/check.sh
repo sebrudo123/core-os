@@ -79,4 +79,16 @@ for script in customization/arch/scripts/*.sh customization/arch/scripts/lib/*.s
 done
 ok "sintaxis de todos los scripts correcta"
 
+# El asistente es Python: un error de sintaxis ahí dejaría el medio en vivo sin
+# instalador, así que se comprueba antes de construir la ISO.
+for py in customization/setup/core-os-setup.py; do
+    python3 -c "
+import sys
+ruta = sys.argv[1]
+with open(ruta) as fh:
+    compile(fh.read(), ruta, 'exec')
+" "$py" || fail "error de sintaxis en $py"
+done
+ok "sintaxis del asistente correcta"
+
 printf '\n\033[1;32mTodo correcto.\033[0m\n'

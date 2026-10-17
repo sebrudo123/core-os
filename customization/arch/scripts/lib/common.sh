@@ -9,6 +9,13 @@
 
 # Valores por defecto (los puede sobrescribir el entorno del build).
 CORE_OS_NAME="${CORE_OS_NAME:-Core OS}"
+# La versión que se muestra dentro del sistema (asistente, /etc/core-os-release).
+# `stage.sh` deja la etiqueta publicada en el perfil; así el medio en vivo
+# muestra la misma versión que la ISO y no el 1.0.0 de relleno.
+if [ -z "${CORE_OS_RELEASE:-}" ] && [ -r /opt/core-os/scripts/VERSION ]; then
+    CORE_OS_RELEASE="$(tr -d '[:space:]' < /opt/core-os/scripts/VERSION)"
+fi
+CORE_OS_RELEASE="${CORE_OS_RELEASE#v}"
 CORE_OS_RELEASE="${CORE_OS_RELEASE:-1.0.0}"
 CORE_OS_BASE="${CORE_OS_BASE:-Arch Linux}"
 CORE_OS_LIVE_USER="${CORE_OS_LIVE_USER:-core}"

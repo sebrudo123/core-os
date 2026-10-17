@@ -31,6 +31,11 @@ PORT = 8765
 TARGET = "/target"
 ISO_BOOTMNTS = ("/run/archiso/bootmnt",)
 
+# Tamaño mínimo para que un dispositivo cuente como disco de instalación. Con
+# este límite se descartan disqueteras (/dev/fd0 mide 0 B o 1,4 MB), lectores de
+# tarjetas vacíos y demás dispositivos que no sirven como destino.
+TAMANO_MINIMO = 2 * 1024 ** 3
+
 # ---------------------------------------------------------------------------
 # Estado compartido con la interfaz gráfica
 # ---------------------------------------------------------------------------
@@ -104,7 +109,26 @@ def is_uefi():
     return os.path.isdir("/sys/firmware/efi")
 
 
+def tamano_en_bytes(texto):
+    """Convierte el tamaño que informa lsblk («24G», «512M», «0B») a bytes."""
+    coincidencia = re.match(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGTPE]?)i?B?\s*$", texto or "")
+    if not coincidencia:
+        return 0
+    factor = {
+        "": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3,
+        "T": 1024 ** 4, "P": 1024 ** 5, "E": 1024 ** 6,
+    }[coincidencia.group(2)]
+    return int(float(coincidencia.group(1)) * factor)
+
+
 def list_disks():
+    """Discos donde tiene sentido instalar Core OS.
+
+    Se descartan los dispositivos que no son discos de verdad (disqueteras,
+    unidades ópticas, dispositivos de bucle, memoria zram…) y los que son
+    demasiado pequeños para alojar el sistema. Sin este filtro aparecía, por
+    ejemplo, `/dev/fd0` (la disquetera) como destino de instalación.
+    """
     out = subprocess.run(
         ["lsblk", "-J", "-dno", "NAME,SIZE,MODEL,TYPE,TRAN,ROTA"],
         capture_output=True, text=True,
@@ -115,10 +139,10 @@ def list_disks():
             if dev.get("type") != "disk":
                 continue
             name = dev["name"]
-            if name.startswith(("loop", "sr", "zram", "ram", "dm-")):
+            if name.startswith(("loop", "sr", "zram", "ram", "fd", "dm-")):
                 continue
             size = (dev.get("size") or "").strip()
-            if not size:
+            if not size or tamano_en_bytes(size) < TAMANO_MINIMO:
                 continue
             disks.append({
                 "device": f"/dev/{name}",
@@ -194,6 +218,21 @@ def sanitize_host(value):
 
 def install(opts):
     disk = opts["disk"]
+
+    # El disco tiene que estar entre los que el instalador considera válidos:
+    # así, aunque llegue una petición con un dispositivo raro (una disquetera,
+    # una unidad óptica…), se avisa con un mensaje claro en vez de intentar
+    # particionarlo.
+    validos = {d["device"] for d in list_disks()}
+    if disk not in validos:
+        disponibles = ", ".join(sorted(validos)) or "ninguno"
+        raise RuntimeError(
+            f"«{disk}» no es un disco válido para instalar Core OS. "
+            f"Discos disponibles: {disponibles}."
+        )
+    if not os.path.exists(disk):
+        raise RuntimeError(f"no existe el dispositivo «{disk}».")
+
     user = sanitize_user(opts.get("user"))
     password = opts.get("password") or "coreos"
     hostname = sanitize_host(opts.get("hostname"))

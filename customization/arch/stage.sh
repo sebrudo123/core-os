@@ -36,6 +36,10 @@ install -d -m 0755 "$OVERLAY"
 log "Copiando los scripts de personalización…"
 cp -a "${REPO_ROOT}/customization/arch/scripts" "${OVERLAY}/scripts"
 
+# La versión construida viaja junto a los scripts para que la personalización
+# (dentro del chroot, donde no llega el entorno del build) sepa cuál es.
+printf '%s\n' "${CORE_OS_VERSION:-1.0.0}" > "${OVERLAY}/scripts/VERSION"
+
 # --- Asistente de instalación ---------------------------------------------
 log "Copiando el asistente de instalación…"
 install -d -m 0755 "${OVERLAY}/setup"

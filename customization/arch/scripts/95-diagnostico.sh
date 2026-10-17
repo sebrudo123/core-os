@@ -66,6 +66,15 @@ informe() {
     printf '\n--- gdm ---\n'
     systemctl --no-pager status gdm.service 2>&1 | head -20 || true
 
+    printf '\n--- entrada automatica del medio en vivo ---\n'
+    systemctl --no-pager status core-os-live-session.service 2>&1 | head -20 || true
+    printf '\n--- registro de la entrada automatica ---\n'
+    if [ -r /var/log/core-os/sesion-en-vivo.log ]; then
+        tail -40 /var/log/core-os/sesion-en-vivo.log
+    else
+        printf '(todavia no hay registro) %s\n' /var/log/core-os/sesion-en-vivo.log
+    fi
+
     printf '\n--- diario de gdm (final) ---\n'
     journalctl -b -u gdm.service --no-pager 2>&1 | tail -40 || true
 

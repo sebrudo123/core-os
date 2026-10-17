@@ -47,6 +47,14 @@ experimental-features=['scale-monitor-framebuffer']
 [org/gnome/settings-daemon/plugins/power]
 sleep-inactive-ac-type='nothing'
 
+# --- La pantalla no se apaga sola -----------------------------------------
+# En el medio en vivo la pantalla se quedaba en negro a los pocos minutos
+# (parecía que el equipo se había colgado) y en las máquinas virtuales de
+# prueba impedía ver el escritorio. Es solo un valor por defecto: cada usuario
+# puede cambiarlo luego desde los ajustes.
+[org/gnome/desktop/session]
+idle-delay=uint32 0
+
 # --- Escritorio limpio (sin iconos de la papelera ni de la carpeta personal)
 [org/gnome/shell/extensions/ding]
 show-home=false
@@ -54,13 +62,15 @@ show-trash=false
 show-volumes=false
 
 # --- Barra de tareas estilo Windows 11 (dash-to-panel) --------------------
+# OJO: no fijar aquí las claves que la extensión guarda en formato JSON
+# (panel-positions, panel-sizes, panel-element-positions, panel-anchors…):
+# un valor vacío hace que la extensión falle al cargar y el escritorio se
+# quede sin barra. Esas claves las gestiona la propia extensión.
 [org/gnome/shell/extensions/dash-to-panel]
 panel-position='BOTTOM'
 panel-size=44
-panel-anchors=''
 taskbar-position='CENTERED'
 group-apps=true
-show-apps-icon-side='END'
 show-favorites=true
 show-running-apps=true
 show-window-buttons='never'
@@ -78,25 +88,19 @@ trans-use-dynamic-opacity=false
 hot-keys=false
 intellihide=false
 animate-appicon-hover=true
-animate-appicon-hover-animation-extent='{ "RIPPLE": 4 }'
 tray-padding=4
 secondarymenu=false
-panel-positions='{"*": "BOTTOM"}'
-panel-sizes='{"*": 44}'
 
-# --- Menú de aplicaciones estilo Windows (arc-menu) -----------------------
+# --- Menú de aplicaciones estilo Windows 11 (arcmenu) ---------------------
+# La disposición «11» es la que imita el menú de inicio de Windows 11.
 [org/gnome/shell/extensions/arcmenu]
-menu-layout='Windows'
+menu-layout='11'
 menu-button-icon='Distro_Icon'
-distro-icon=0
-position-in-panel='panel'
+position-in-panel='Left'
 menu-button-appearance='Icon'
 menu-background-color='#1b2437'
 menu-foreground-color='#dbe4f5'
 menu-separator-color='#2f3d5c'
-active-menu-item-color='#38bdf8'
-disable-recently-installed-apps=false
-show-apps-categories=true
 
 # --- Bandeja del sistema (iconos de aplicaciones) -------------------------
 [org/gnome/shell/extensions/appindicator]

@@ -114,10 +114,18 @@ input[type="text"], input[type="password"], select {
   max-width: 460px;
   padding: 10px 12px;
   font: inherit;
-  color: inherit;
-  background: transparent;
+  /* Color explícito: con el fondo transparente el navegador pintaba el
+     desplegable en claro y el texto (que es claro) quedaba invisible. */
+  color: #e8eefc;
+  background: rgba(255, 255, 255, .06);
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+/* La lista desplegable la dibuja el propio sistema: fondo claro, texto oscuro. */
+select option {
+  color: #0b1220;
+  background: #f2f5fb;
 }
 
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; }
