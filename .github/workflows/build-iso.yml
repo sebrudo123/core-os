@@ -127,7 +127,7 @@ jobs:
           iso="$(ls -1 ./*.iso | head -1)"
           size="$(stat -c%s "$iso")"
           echo "ISO: ${iso} ($((size / 1048576)) MB)"
-          if [ "$size" -lt 1900000000 ]; then
+          if [ "$size" -lt 2100000000 ]; then
             {
               echo "files<<ASSETS_EOF"
               echo "$iso"
@@ -154,6 +154,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          # Los archivos preparados en el paso anterior están en customization/out
+          working-directory: customization/out
           name: Core OS ${{ github.ref_name }}
           generate_release_notes: true
           body: |
