@@ -81,8 +81,12 @@ dconf-cli
 libglib2.0-bin
 # Tienda de aplicaciones (estilo Microsoft Store) con Flatpak
 flatpak
-gnome-software
-gnome-software-plugin-flatpak
+# NOTA: en Ubuntu 24.04 `gnome-software` (y `gnome-software-plugin-flatpak`)
+# son paquetes de transición al snap, y por tanto arrastran `snapd` (que Core OS
+# no usa). Se omiten: para instalar apps se usa Flatpak directamente
+# (`flatpak install flathub ...`) y el "gestor de software" de Core OS.
+# gnome-software
+# gnome-software-plugin-flatpak
 
 # --- Asistente de instalación propio (estilo Windows 11) ---
 # Interfaz del instalador: GTK + WebKit2GTK (HTML/CSS/JS) y utilidades de disco.

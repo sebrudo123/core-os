@@ -42,9 +42,28 @@ fi
 mapfile -t REMOVE < <(list_packages "$REMOVE_FILE")
 if [ "${#REMOVE[@]}" -gt 0 ]; then
   log "Purgando ${#REMOVE[@]} paquetes no deseados..."
-  # --allow-remove-essential no; ignoramos los que no existan con || true
-  run apt-get purge -y "${REMOVE[@]}" || warn "algunos paquetes a purgar no existían"
+  # OJO (bug crítico ya sufrido): en Ubuntu `apt-get purge` activa el
+  # autoremove automático y la imagen base marca como "auto" casi todo el
+  # escritorio. Al purgar paquetes de los que dependen los metapaquetes
+  # (ubuntu-desktop-minimal, ubuntu-minimal), apt elimina en cascada
+  # gdm3, gnome-shell, ubuntu-session, xwayland... y el ISO se queda SIN
+  # ESCRITORIO. Solución: marcar todo como "manual" (nada es huérfano) y
+  # desactivar el autoremove en la propia purga.
+  apt-mark showauto | xargs -r apt-mark manual || true
+  run apt-get purge -y -o APT::Get::AutomaticRemove=false "${REMOVE[@]}" \
+    || warn "algunos paquetes a purgar no existían"
 fi
+
+# --- Red de seguridad: el escritorio es imprescindible ----------------------
+if [ ! -x /usr/bin/gnome-shell ] || [ ! -x /usr/sbin/gdm3 ]; then
+  warn "el escritorio quedó incompleto; reinstalando lo esencial..."
+  run apt-get install -y --no-install-recommends \
+    gdm3 ubuntu-session gnome-shell gnome-session-bin gnome-shell-common xwayland \
+    || warn "no se pudo reinstalar el escritorio"
+fi
+for bin in /usr/bin/gnome-shell /usr/sbin/gdm3 /usr/bin/gnome-session; do
+  [ -e "$bin" ] || die "falta $bin: se ha eliminado el escritorio del ISO"
+done
 
 log "Limpieza de dependencias huérfanas..."
 run apt-get autoremove -y
