@@ -15,6 +15,8 @@
 #        --ubuntu-release <v> Release de Ubuntu base (por defecto 24.04)
 #        --ubuntu-codename <c> Codename de Ubuntu (por defecto noble)
 #        --url <url>          URL de la ISO base (por defecto, auto)
+#        --squashfs-rel <p>   Ruta de la rootfs editable dentro de la ISO
+#        --comp <xz|gzip|zstd> Compresión del squashfs (por defecto xz)
 #        --work <dir>         Directorio de trabajo (por defecto ./work)
 #        --out <dir>          Directorio de salida (por defecto ./out)
 #        --prepare-only       Sólo prepara el árbol y aplica scripts (no repaqueta)
@@ -50,6 +52,10 @@ KEEP=0
 PREPARE_ONLY=0
 NO_DOWNLOAD=0
 VOLID="CORE_OS"
+# Compresión del squashfs: xz (menor) o gzip (más rápido). Configurable por env.
+SQUASHFS_COMP="${CORE_OS_SQUASHFS_COMP:-xz}"
+# Permite forzar la ruta del squashfs editable dentro del árbol de la ISO.
+SQUASHFS_REL_OVERRIDE="${CORE_OS_SQUASHFS_REL:-}"
 
 # ---------------------------------------------------------------------------
 # Utilidades de log
@@ -62,7 +68,7 @@ die()  { printf "${c_red}[build-iso] ERROR:${c_reset} %s\n" "$*" >&2; exit 1; }
 
 die_usage() { die "$*"; }
 
-usage() { sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------
 # Parseo de argumentos
@@ -74,6 +80,8 @@ parse_args() {
       --ubuntu-release)      UBUNTU_RELEASE="$2"; shift 2 ;;
       --ubuntu-codename)     UBUNTU_CODENAME="$2"; shift 2 ;;
       --url)                 ISO_URL="$2"; shift 2 ;;
+      --squashfs-rel)        SQUASHFS_REL_OVERRIDE="$2"; shift 2 ;;
+      --comp)                SQUASHFS_COMP="$2"; shift 2 ;;
       --work)                WORK_DIR="$2"; shift 2 ;;
       --out)                 OUT_DIR="$2"; shift 2 ;;
       --prepare-only)        PREPARE_ONLY=1; shift ;;
@@ -136,8 +144,51 @@ resolve_paths() {
   ISO_FILE="$CACHE_DIR/$(basename "$ISO_URL")"
   ISO_TREE="$WORK_DIR/iso"
   EDIT_TREE="$WORK_DIR/edit"
-  SQUASHFS_REL="casper/filesystem.squashfs"
+  # Se detecta tras extraer la ISO (puede ser casper/filesystem.squashfs o
+  # casper/minimal.squashfs en las imágenes modernas por capas).
+  SQUASHFS_REL="$SQUASHFS_REL_OVERRIDE"
   OUTPUT_ISO="$OUT_DIR/core-os-${CORE_OS_RELEASE}-amd64.iso"
+}
+
+# ---------------------------------------------------------------------------
+# Detección del squashfs editable (rootfs base) dentro del árbol de la ISO
+# ---------------------------------------------------------------------------
+# Ubuntu 24.04.x usa imágenes "por capas": casper/minimal.squashfs (desktop) o
+# casper/ubuntu-server-minimal.squashfs (server) son rootfs completas, y el
+# resto de archivos *.squashfs son capas adicionales que se superponen encima.
+# Remasterizamos la capa base, que es autocontenida y arrancable.
+detect_squashfs() {
+  [ -n "$SQUASHFS_REL" ] && return 0
+
+  local candidates=(
+    "casper/filesystem.squashfs"        # Ubuntu clásico (<= 22.04 / live)
+    "casper/minimal.squashfs"           # Ubuntu Desktop moderno (por capas)
+    "casper/ubuntu-server-minimal.squashfs"  # Ubuntu Server moderno (base)
+    "live/filesystem.squashfs"          # Debian live
+  )
+  local c
+  for c in "${candidates[@]}"; do
+    if [ -f "$ISO_TREE/$c" ]; then
+      SQUASHFS_REL="$c"
+      log "Rootfs detectada: $c"
+      return 0
+    fi
+  done
+
+  # Último recurso: el squashfs más grande de casper/ (la capa base suele serlo).
+  local biggest=""
+  if [ -d "$ISO_TREE/casper" ]; then
+    biggest="$(find "$ISO_TREE/casper" -maxdepth 1 -name '*.squashfs' -type f \
+      -printf '%s %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+    if [ -n "$biggest" ]; then
+      SQUASHFS_REL="casper/$(basename "$biggest")"
+      warn "formato no reconocido; se usará el squashfs más grande: $SQUASHFS_REL"
+      return 0
+    fi
+  fi
+
+  die "no se encontró ninguna rootfs (.squashfs) editable en la ISO.
+  Usa --squashfs-rel <ruta> para indicarla manualmente."
 }
 
 # ---------------------------------------------------------------------------
@@ -237,6 +288,7 @@ extract_iso() {
   xorriso -osirrox on -indev "$ISO_FILE" -extract / "$ISO_TREE" \
     2>&1 | sed 's/^/[xorriso] /' | tail -n 3
   chmod -R u+w "$ISO_TREE"
+  detect_squashfs
   [ -f "$ISO_TREE/$SQUASHFS_REL" ] || die "no se encontró $SQUASHFS_REL en la ISO"
   ok "Árbol de la ISO extraído"
 }
@@ -338,13 +390,22 @@ run_chroot_scripts() {
 # Reempaquetado
 # ---------------------------------------------------------------------------
 repack_squashfs() {
-  log "Recomprimiendo el sistema de archivos (esto tarda varios minutos)..."
+  log "Recomprimiendo $SQUASHFS_REL con ${SQUASHFS_COMP} (esto tarda varios minutos)..."
   local target="$ISO_TREE/$SQUASHFS_REL"
   rm -f "$target"
-  # xz da menor tamaño; gzip es más rápido. Usamos xz por defecto.
   mksquashfs "$EDIT_TREE" "$target" \
-    -noappend -comp xz -b 1M -no-progress
-  ok "filesystem.squashfs regenerado ($(du -h "$target" | cut -f1))"
+    -noappend -comp "$SQUASHFS_COMP" -b 1M -no-progress
+
+  # Actualiza el archivo .size hermano (casper valida el tamaño sin comprimir).
+  local size_file="${target%.squashfs}.size"
+  if [ -f "$size_file" ]; then
+    local uncompressed
+    uncompressed=$(du -sb "$EDIT_TREE" | cut -f1)
+    printf '%s\n' "$uncompressed" > "$size_file"
+    log "Actualizado $(basename "$size_file") ($uncompressed bytes)"
+  fi
+
+  ok "$SQUASHFS_REL regenerado ($(du -h "$target" | cut -f1))"
 }
 
 regenerate_checksums() {

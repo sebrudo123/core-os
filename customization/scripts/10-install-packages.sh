@@ -21,7 +21,22 @@ if [ "${#PACKAGES[@]}" -eq 0 ]; then
   die "no se encontraron paquetes en $PACKAGES_FILE"
 fi
 log "Instalando ${#PACKAGES[@]} paquetes de Core OS..."
-run apt-get install -y --no-install-recommends "${PACKAGES[@]}"
+
+# Intenta la instalación en bloque; si falla (p. ej. un paquete inexistente),
+# cae a instalarlos uno a uno para no abortar toda la construcción.
+if ! run apt-get install -y --no-install-recommends "${PACKAGES[@]}"; then
+  warn "la instalación en bloque falló; se instalan uno a uno omitiendo errores"
+  FAILED_PKGS=()
+  for pkg in "${PACKAGES[@]}"; do
+    if ! run apt-get install -y --no-install-recommends "$pkg"; then
+      warn "no se pudo instalar: $pkg"
+      FAILED_PKGS+=("$pkg")
+    fi
+  done
+  if [ "${#FAILED_PKGS[@]}" -gt 0 ]; then
+    warn "paquetes omitidos: ${FAILED_PKGS[*]}"
+  fi
+fi
 
 # --- Purga -----------------------------------------------------------------
 mapfile -t REMOVE < <(list_packages "$REMOVE_FILE")

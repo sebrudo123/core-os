@@ -133,8 +133,10 @@ jobs:
           CORE_OS_RELEASE: ${{ env.CORE_OS_VERSION }}
           UBUNTU_RELEASE: ${{ env.UBUNTU_RELEASE }}
           UBUNTU_CODENAME: ${{ env.UBUNTU_CODENAME }}
+          # gzip es más rápido que xz (menos riesgo de agotar el tiempo del job).
+          CORE_OS_SQUASHFS_COMP: gzip
         run: |
-          sudo --preserve-env=CORE_OS_RELEASE,UBUNTU_RELEASE,UBUNTU_CODENAME \
+          sudo --preserve-env=CORE_OS_RELEASE,UBUNTU_RELEASE,UBUNTU_CODENAME,CORE_OS_SQUASHFS_COMP \
             ./customization/build-iso.sh --release "${CORE_OS_RELEASE}"
 
       - name: Generar checksums

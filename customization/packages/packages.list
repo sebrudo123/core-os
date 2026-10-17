@@ -57,10 +57,11 @@ file-roller
 gufw
 
 # --- Navegación y ofimática ---
-firefox
+# NOTA: en Ubuntu 24.04 `firefox` y `thunderbird` son paquetes de transición a
+# snap; como Core OS usa APT + Flatpak (sin snapd), no se instalan aquí.
+# Para el navegador se puede usar Flatpak (ver scripts/40) o el .deb de Mozilla.
 libreoffice-calc
 libreoffice-writer
-thunderbird
 
 # --- Fuentes e idiomas ---
 fonts-firacode
