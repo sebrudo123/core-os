@@ -496,6 +496,17 @@ brand_iso_tree() {
   sed -i '/^[[:space:]]*menuentry/ s/Ubuntu/Core OS/g' "$cfg" || true
   # Quita el splash de Ubuntu (Plymouth del initrd) manteniendo "quiet".
   sed -i 's/quiet splash/quiet/g' "$cfg" || true
+  # Core OS trae su PROPIO instalador: se quitan los restos del instalador
+  # clásico de Ubuntu (ubiquity + preseed). Si se dejan, casper arranca la fase
+  # de preparación de ubiquity en la sesión en vivo (apt-cdrom, usuario en vivo,
+  # configuración de paquetes) y puede impedir que arranque el escritorio.
+  sed -i -E 's#[[:space:]]+(file=/cdrom/preseed/[^ ]+|maybe-ubiquity)##g' "$cfg" || true
+  # Consola serie (además de la de vídeo) para poder diagnosticar el arranque.
+  if ! grep -q 'console=ttyS0' "$cfg"; then
+    sed -i -E 's#(vmlinuz)#\1 console=tty0 console=ttyS0,115200#' "$cfg" || true
+  fi
+  log "Línea de arranque:"
+  grep -E '^[[:space:]]*linux' "$cfg" | head -3 || true
   ok "Identidad de arranque aplicada (Core OS)"
 }
 

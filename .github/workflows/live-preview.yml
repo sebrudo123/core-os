@@ -84,6 +84,7 @@ jobs:
             -vga std -display none \
             -vnc :0 \
             -monitor unix:/tmp/mon.sock,server,nowait \
+            -serial file:/tmp/serial.log \
             -rtc base=utc \
             -device qemu-xhci -device usb-tablet \
             -netdev user,id=n0 -device e1000,netdev=n0 \
@@ -94,6 +95,25 @@ jobs:
           sleep 3
           echo "QEMU arrancado (pid $(cat /tmp/qemu.pid))"
           tail -5 /tmp/qemu.log || true
+
+          # Captura temprana del arranque (initramfs/casper/servicios). El túnel
+          # tarda en estar listo, así que guardamos fotogramas desde el inicio:
+          # sin esto, los mensajes que explican los fallos se pierden.
+          sudo mkdir -p /usr/share/novnc/shots
+          sudo chown "$USER" /usr/share/novnc/shots
+          echo "Capturando los primeros 3 min de arranque..."
+          for i in $(seq 1 60); do
+            printf 'screendump /tmp/shot.ppm\n' | socat - UNIX-CONNECT:/tmp/mon.sock >/dev/null 2>&1 || true
+            sleep 0.4
+            if [ -f /tmp/shot.ppm ]; then
+              convert /tmp/shot.ppm \
+                "/usr/share/novnc/shots/boot-$(printf '%03d' "$i").png" 2>/dev/null || true
+              rm -f /tmp/shot.ppm
+            fi
+            sleep 2
+          done
+          cp -f /tmp/serial.log /usr/share/novnc/shots/serial.log 2>/dev/null || true
+          echo "Captura temprana completada."
 
       - name: Arrancar noVNC, túnel y captura de pantalla
         id: tunnel
@@ -136,6 +156,7 @@ jobs:
             echo ""
             echo "- **Interactuar:** ${NOVNC}"
             echo "- **Captura actual:** ${URL}/shots/latest.png"
+            echo "- **Log de arranque:** ${URL}/shots/serial.log"
             echo "- Sesión efímera (~${{ github.event.inputs.minutes }} min)."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -178,6 +199,8 @@ jobs:
                 cp -f /usr/share/novnc/shots/latest.png \
                   "/usr/share/novnc/shots/shot-$(printf '%03d' "$i").png" 2>/dev/null || true
               fi
+              # Log de arranque (consola serie) accesible por HTTP.
+              cp -f /tmp/serial.log /usr/share/novnc/shots/serial.log 2>/dev/null || true
               rm -f /tmp/shot.ppm
             fi
             sleep 14
