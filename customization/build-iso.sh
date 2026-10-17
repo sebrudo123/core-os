@@ -392,26 +392,28 @@ copy_customization_into_chroot() {
 
 run_chroot_scripts() {
   log "Ejecutando los scripts de personalización en el chroot..."
-  # Ordena los scripts NN-*.sh y ejecútalos con las variables de entorno.
-  local script_list
-  script_list="$(cd "$EDIT_TREE/opt/core-os/scripts" && ls -1 [0-9][0-9]-*.sh | sort)"
-
+  # Nota: se usa globbing DENTRO del chroot para no romper el `for` con saltos
+  # de línea al interpolar la lista desde el exterior.
   chroot "$EDIT_TREE" /usr/bin/env \
     CORE_OS_RELEASE="$CORE_OS_RELEASE" \
     UBUNTU_RELEASE="$UBUNTU_RELEASE" \
     UBUNTU_CODENAME="$UBUNTU_CODENAME" \
     CORE_OS_DRY_RUN=0 \
     DEBIAN_FRONTEND=noninteractive \
-    /bin/bash -c "
+    /bin/bash -c '
       set -euo pipefail
       cd /opt/core-os
-      for s in $script_list; do
-        echo '============================================'
-        echo \"[core-os] ejecutando \$s\"
-        echo '============================================'
-        bash \"scripts/\$s\"
+      shopt -s nullglob
+      scripts=( scripts/[0-9][0-9]-*.sh )
+      if [ "${#scripts[@]}" -eq 0 ]; then
+        echo "[core-os] ERROR: no hay scripts NN-*.sh" >&2
+        exit 1
+      fi
+      for s in "${scripts[@]}"; do
+        printf "\n\033[1;34m[core-os]\033[0m ===== %s =====\n" "$s"
+        bash "$s"
       done
-    "
+    '
   ok "Personalización aplicada"
 }
 
