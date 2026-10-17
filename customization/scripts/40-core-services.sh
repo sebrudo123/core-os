@@ -9,8 +9,6 @@ source "$(dirname "$0")/lib/common.sh"
 require_root
 export DEBIAN_FRONTEND=noninteractive
 
-ADMIN_USER="${CORE_OS_ADMIN_USER:-coreadmin}"
-
 # --- Servicios --------------------------------------------------------------
 log "Habilitando servicios esenciales..."
 enable_service() {
@@ -35,20 +33,11 @@ if command -v ufw >/dev/null 2>&1; then
 fi
 
 # --- Usuario administrador --------------------------------------------------
-if id "$ADMIN_USER" >/dev/null 2>&1; then
-  log "El usuario $ADMIN_USER ya existe"
-else
-  log "Creando usuario administrador: $ADMIN_USER"
-  # OJO: el medio en vivo crea el usuario `ubuntu` con UID 1000 (casper
-  # fuerza `passwd/user-uid 1000`). Si ocupamos el 1000, el usuario en vivo NO
-  # se crea, no hay autologin y la sesión gráfica no arranca. Por eso el admin
-  # se crea a partir del 1500.
-  run adduser --firstuid 1500 --disabled-password \
-    --gecos "Core OS Administrator" "$ADMIN_USER" || true
-  run usermod -aG sudo,adm,docker "$ADMIN_USER" || true
-  # Contraseña inicial: se fuerza cambio en el primer inicio de sesión
-  run chage -d 0 "$ADMIN_USER" || true
-fi
+# Core OS NO crea aquí una cuenta de administrador: el medio en vivo usa su
+# propio usuario (lo crea 38-live-user.sh con UID 1000) y el instalador crea la
+# cuenta definitiva del sistema instalado (UID 1000). Crear aquí un usuario
+# extra solo añadía una cuenta con sudo sin uso.
+log "Cuentas: las gestionan 38-live-user.sh (medio en vivo) y el instalador."
 
 # --- Primer arranque --------------------------------------------------------
 log "Instalando script de primer arranque..."

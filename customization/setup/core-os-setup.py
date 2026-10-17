@@ -217,19 +217,24 @@ def install(opts):
 
     # --- 6. Usuario --------------------------------------------------------
     progress(70, "Creando la cuenta de usuario…")
+    # Primero se eliminan los usuarios del MEDIO EN VIVO ('core' lo crea Core OS
+    # y 'ubuntu' lo intenta crear casper): tienen sudo sin contraseña y no deben
+    # quedar en el sistema instalado. Se hace ANTES de crear la cuenta del
+    # usuario para que esta reciba el UID 1000.
+    run_chroot("userdel -r core 2>/dev/null || true")
+    run_chroot("userdel -r ubuntu 2>/dev/null || true")
+    run_chroot("userdel -r coreadmin 2>/dev/null || true")
+    run_chroot("rm -f /etc/sudoers.d/casper /etc/sudoers.d/90-core-os-live || true")
+    # Sin autologin en el sistema final: se entra con la contraseña elegida.
+    run_chroot("printf '[daemon]\\nAutomaticLoginEnable=false\\n' > /etc/gdm3/custom.conf || true")
+    # Elimina el asistente del sistema instalado (solo vive en el medio).
+    run_chroot("rm -f /etc/xdg/autostart/core-os-setup.desktop || true")
     run_chroot(f"id {user} >/dev/null 2>&1 || adduser --disabled-password "
                f"--gecos \"{user}\" {user}")
     run_chroot(f"usermod -aG sudo,adm,docker {user} || usermod -aG sudo,adm {user}")
     safe_pw = password.replace("'", "'\\''")
     run_chroot(f"echo '{user}:{safe_pw}' | chpasswd")
-    run_chroot(f"chage -m 0 -M 99999 -I -1 -E -1 {user}")
-
-    # Elimina el asistente del sistema instalado (solo vive en el medio).
-    run_chroot("rm -f /etc/xdg/autostart/core-os-setup.desktop || true")
-    # Elimina el usuario del medio en vivo (creado por casper con UID 1000 sin
-    # contraseña y con sudo sin contraseña): no debe quedar en el sistema final.
-    run_chroot("userdel -r ubuntu 2>/dev/null || true")
-    run_chroot("rm -f /etc/sudoers.d/casper || true")
+    run_chroot(f"chage -d \"$(date +%Y-%m-%d)\" -m 0 -M 99999 -I -1 -E -1 {user}")
 
     # --- 7. Gestor de arranque --------------------------------------------
     progress(80, "Instalando el gestor de arranque (GRUB)…")
