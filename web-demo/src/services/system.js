@@ -148,7 +148,7 @@ export async function getStatus() {
     name: release?.CORE_OS_NAME || config.coreOs.name,
     version: release?.CORE_OS_RELEASE || config.coreOs.release,
     base: config.coreOs.base,
-    codename: release?.CORE_OS_CODENAME || 'noble',
+    codename: release?.CORE_OS_CODENAME || 'core',
     simulated: config.demoMode,
     real: real && !config.demoMode,
     hostname: os.hostname(),

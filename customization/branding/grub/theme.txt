@@ -1,45 +1,76 @@
 # ===========================================================================
-#  Tema de arranque (GRUB2) de Core OS
-#  Se instala en /boot/grub/themes/core-os/  (ver scripts/35-debrand-ubuntu.sh)
+#  Core OS — tema del menú de arranque (GRUB 2)
+#
+#  Se usa en dos sitios:
+#    · la ISO, en /boot/grub/themes/core-os/   (lo prepara arch/stage.sh)
+#    · el sistema instalado, en /boot/grub/themes/core-os/
+#      (el instalador lo copia desde /usr/share/core-os/grub-theme/)
+#
+#  A propósito NO se declaran tipografías ni imágenes de selección: así el tema
+#  funciona con cualquier fuente que GRUB tenga cargada y nunca muestra errores
+#  por archivos que falten.
 # ===========================================================================
 
-title-text: "Core OS"
-title-color: "#dbe4f5"
-title-font: "Unifont Regular 24"
-
+title-text: ""
 desktop-image: "background.png"
 desktop-color: "#0b1220"
 
-terminal-font: "Unifont Regular 16"
-terminal-left: "15%"
-terminal-top: "20%"
-terminal-width: "70%"
-terminal-height: "60%"
-terminal-border: "1"
+# --- Título ---------------------------------------------------------------
++ label {
+  top = 8%
+  left = 0
+  width = 100%
+  align = "center"
+  color = "#eaf1ff"
+  text = "Core OS"
+}
 
++ label {
+  top = 16%
+  left = 0
+  width = 100%
+  align = "center"
+  color = "#38bdf8"
+  text = "Sistema operativo libre basado en Arch Linux"
+}
+
+# --- Menú -----------------------------------------------------------------
 + boot_menu {
   left = 18%
-  top = 32%
+  top = 28%
   width = 64%
   height = 52%
-  item_font = "Unifont Regular 16"
-  item_color = "#c7d2e6"
-  selected_item_color = "#38bdf8"
-  item_height = 32
+  item_height = 34
   item_padding = 8
-  item_spacing = 8
+  item_spacing = 6
+  item_color = "#c7d2e6"
+  selected_item_color = "#ffffff"
   icon_width = 0
   icon_height = 0
   scrollbar = true
   scrollbar_width = 8
+  scrollbar_frame = true
 }
 
+# --- Ayuda -----------------------------------------------------------------
 + label {
-  top = 90%
+  top = 86%
   left = 0
   width = 100%
   align = "center"
   color = "#7f92b4"
-  font = "Unifont Regular 10"
-  text = "↑/↓ seleccionar   ·   Enter arrancar   ·   'e' editar"
+  text = "↑ ↓ elegir   ·   Intro arrancar   ·   «e» editar   ·   «c» consola"
+}
+
++ progress_bar {
+  id = "__timeout__"
+  left = 18%
+  top = 92%
+  width = 64%
+  height = 12
+  show_text = true
+  text_color = "#7f92b4"
+  fg_color = "#38bdf8"
+  bg_color = "#1b2437"
+  border_color = "#2f3d5c"
 }

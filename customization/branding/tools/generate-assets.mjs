@@ -165,8 +165,10 @@ function makeGrubBackground(w, h) {
 
 const logo512 = makeLogo(512, false);
 save('logo/core-os.png', logo512);
-save('plymouth/logo.png', makeLogo(256, true));
 save('grub/logo.png', makeLogo(96, true));
 save('grub/background.png', makeGrubBackground(1920, 1080));
+// Pantalla del menú de arranque BIOS (syslinux/vesamenu): resolución moderada
+// para que cualquier firmware pueda mostrarla.
+save('grub/splash-syslinux.png', makeGrubBackground(1024, 768));
 
 console.log('Recursos generados correctamente.');

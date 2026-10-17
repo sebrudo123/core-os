@@ -1,3 +1,0 @@
-# meta-data — requisitos de cloud-init para Ubuntu Autoinstall de Core OS
-instance-id: core-os-autoinstall-001
-local-hostname: core-os-node

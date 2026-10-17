@@ -1,4 +1,4 @@
-# --- Artefactos de compilación de la ISO ---
+# --- Artefactos de construcción de la ISO ---------------------------------
 customization/out/
 customization/work/
 customization/cache/
@@ -8,31 +8,32 @@ customization/cache/
 *.zip
 *.tar.gz
 
-# --- Node / Modo Demo Web ---
+# Material que `customization/arch/stage.sh` copia al perfil de archiso antes
+# de construir (se regenera en cada build, no se versiona).
+customization/archiso/airootfs/opt/
+customization/archiso/grub/themes/
+customization/archiso/grub/fonts/
+customization/archiso/syslinux/splash.png
+
+# --- Node ------------------------------------------------------------------
 node_modules/
 web-demo/node_modules/
-.web-next/
-# Vercel / Render
-.vercel/
-.render/
-
-# Mantener datos de ejemplo pero ignorar runtime
 web-demo/data/runtime/
 web-demo/*.log
+.render/
+.vercel/
 
-# --- Entorno ---
+# --- Entorno ---------------------------------------------------------------
 .env
 .env.*
 !.env.example
 
-# --- Editores / SO ---
+# --- Editores / sistema ----------------------------------------------------
 .vscode/
 .idea/
 *.swp
 .DS_Store
 Thumbs.db
-
-# --- Varios ---
 *.tmp
 tmp/
 dist/

@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 # ===========================================================================
-#  core-os-setup.py — Asistente de instalación de Core OS (estilo Windows 11).
+#  Core OS Setup — asistente de instalación (estilo Windows 11)
 #
-#  Se ejecuta en la sesión EN VIVO (medio de instalación) y muestra un
-#  asistente a pantalla completa. El backend realiza la instalación REAL en el
-#  disco elegido: particiona, formatea, copia el sistema, instala GRUB y
-#  configura usuario/idioma/teclado.
+#  Este programa TIENE DOS MODOS:
 #
-#  La interfaz es HTML/CSS/JS servida localmente y se muestra con WebKit2GTK.
+#    --server-only   Se ejecuta como root (servicio core-os-setupd). Levanta la
+#                    API local en 127.0.0.1:8765 y hace la instalación REAL.
+#    --ui-only       Se ejecuta en la sesión gráfica del medio en vivo y muestra
+#                    la interfaz a pantalla completa (WebKit2GTK).
+#
+#  La instalación es real: particiona el disco, formatea, copia Core OS, genera
+#  el initramfs, instala GRUB y crea la cuenta del usuario. Está escrita para
+#  Arch Linux (pacman/mkinitcpio/GRUB), que es la base de Core OS.
 # ===========================================================================
+import glob
 import json
 import os
 import re
@@ -22,10 +27,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(BASE_DIR, "ui")
 PORT = 8765
+
 TARGET = "/target"
+ISO_BOOTMNTS = ("/run/archiso/bootmnt",)
 
 # ---------------------------------------------------------------------------
-# Estado compartido con la interfaz
+# Estado compartido con la interfaz gráfica
 # ---------------------------------------------------------------------------
 STATE = {
     "running": False,
@@ -40,10 +47,13 @@ _LOCK = threading.Lock()
 
 
 def log_line(text):
+    text = str(text).rstrip()
+    if not text:
+        return
     with _LOCK:
         STATE["log"].append(text)
-        if len(STATE["log"]) > 500:
-            STATE["log"] = STATE["log"][-500:]
+        if len(STATE["log"]) > 800:
+            STATE["log"] = STATE["log"][-800:]
 
 
 def set_state(**kw):
@@ -51,28 +61,49 @@ def set_state(**kw):
         STATE.update(kw)
 
 
-def run(cmd, check=True, **kw):
-    """Ejecuta un comando y registra su salida."""
+def progress(pct, msg):
+    set_state(percent=int(pct), message=msg)
+    log_line(f"[{int(pct):3d}%] {msg}")
+
+
+# ---------------------------------------------------------------------------
+# Ejecución de comandos
+# ---------------------------------------------------------------------------
+def sh(cmd, check=True, input_text=None, quiet=False):
+    """Ejecuta un comando del sistema y registra su salida."""
     pretty = cmd if isinstance(cmd, str) else " ".join(cmd)
-    log_line("$ " + pretty)
-    p = subprocess.run(cmd, capture_output=True, text=True, **kw)
-    if p.stdout:
-        log_line(p.stdout.rstrip())
-    if p.stderr:
-        log_line(p.stderr.rstrip())
+    if not quiet:
+        log_line("$ " + pretty)
+    p = subprocess.run(
+        cmd, shell=isinstance(cmd, str), capture_output=True, text=True, input=input_text
+    )
+    if not quiet:
+        if p.stdout:
+            log_line(p.stdout)
+        if p.stderr:
+            log_line(p.stderr)
     if check and p.returncode != 0:
-        raise RuntimeError(f"falló ({p.returncode}): {pretty}\n{p.stderr.strip()}")
+        raise RuntimeError(f"El comando falló ({p.returncode}): {pretty}")
     return p
 
 
-def run_chroot(command):
-    """Ejecuta un comando dentro del sistema destino."""
-    return run(["chroot", TARGET, "/bin/bash", "-c", command])
+def in_target(command, check=True, input_text=None):
+    """Ejecuta un comando dentro del sistema instalado (arch-chroot)."""
+    return sh(["arch-chroot", TARGET, "/bin/bash", "-c", command],
+              check=check, input_text=input_text)
+
+
+def have(program):
+    return shutil.which(program) is not None
 
 
 # ---------------------------------------------------------------------------
-# Discos disponibles
+# Detección de discos y del firmware
 # ---------------------------------------------------------------------------
+def is_uefi():
+    return os.path.isdir("/sys/firmware/efi")
+
+
 def list_disks():
     out = subprocess.run(
         ["lsblk", "-J", "-dno", "NAME,SIZE,MODEL,TYPE,TRAN,ROTA"],
@@ -80,199 +111,325 @@ def list_disks():
     ).stdout
     disks = []
     try:
-        for d in json.loads(out).get("blockdevices", []):
-            if d.get("type") != "disk":
+        for dev in json.loads(out).get("blockdevices", []):
+            if dev.get("type") != "disk":
                 continue
-            name = d["name"]
-            if name.startswith(("loop", "sr", "zram")):
+            name = dev["name"]
+            if name.startswith(("loop", "sr", "zram", "ram", "dm-")):
+                continue
+            size = (dev.get("size") or "").strip()
+            if not size:
                 continue
             disks.append({
                 "device": f"/dev/{name}",
-                "size": (d.get("size") or "").strip(),
-                "model": (d.get("model") or "Disco").strip(),
-                "rotational": d.get("rota") in (True, "1", 1),
+                "size": size,
+                "model": (dev.get("model") or "Disco").strip(),
+                "removable": dev.get("tran") in ("usb", "mmc"),
+                "rotational": dev.get("rota") in (True, "1", 1),
             })
-    except Exception as exc:  # pragma: no cover
-        log_line(f"error listando discos: {exc}")
+    except Exception as exc:
+        log_line(f"no se pudieron listar los discos: {exc}")
     return disks
 
 
-def part_name(disk, index):
-    """Nombre de la partición según el tipo de dispositivo."""
-    if re.match(r".*(nvme\d+n\d+|mmcblk\d+|loop\d+)$", disk):
+def partition_path(disk, index):
+    """Ruta de la partición número `index` del disco indicado."""
+    if re.match(r".*(nvme\d+n\d+|mmcblk\d+|loop\d+|md\d+)$", disk):
         return f"{disk}p{index}"
     return f"{disk}{index}"
 
 
 # ---------------------------------------------------------------------------
+# Kernel e initramfs
+# ---------------------------------------------------------------------------
+def find_iso_kernel():
+    """Localiza el kernel dentro de la ISO (archiso borra /boot del sistema en
+    vivo, así que el kernel solo está en el directorio del ISO)."""
+    patterns = []
+    for mnt in ISO_BOOTMNTS:
+        patterns += [
+            f"{mnt}/*/boot/*/vmlinuz-*",
+            f"{mnt}/*/boot/vmlinuz-*",
+            f"{mnt}/boot/*/vmlinuz-*",
+        ]
+    for pattern in patterns:
+        found = sorted(glob.glob(pattern))
+        if found:
+            return found[0]
+    return None
+
+
+def copy_kernel_to_target():
+    """Copia el kernel (y los microcódigos) de la ISO al /boot del sistema."""
+    kernel = find_iso_kernel()
+    if not kernel:
+        raise RuntimeError(
+            "No se encontró el kernel de Core OS dentro de la ISO "
+            "(¿se está ejecutando desde el medio en vivo?)"
+        )
+    log_line(f"Kernel de la ISO: {kernel}")
+    sh(["install", "-m", "0644", kernel, f"{TARGET}/boot/"])
+    boot_dir = os.path.dirname(kernel)
+    for ucode in ("amd-ucode.img", "intel-ucode.img"):
+        for candidate in (os.path.join(boot_dir, ucode),
+                          os.path.join(os.path.dirname(boot_dir), ucode)):
+            if os.path.isfile(candidate):
+                sh(["install", "-m", "0644", candidate, f"{TARGET}/boot/"])
+                break
+    return os.path.basename(kernel)
+
+
+# ---------------------------------------------------------------------------
 # Instalación
 # ---------------------------------------------------------------------------
-def is_uefi():
-    return os.path.isdir("/sys/firmware/efi")
+def sanitize_user(value):
+    value = re.sub(r"[^a-z0-9_-]", "", (value or "").lower())
+    return value if re.match(r"^[a-z]", value or "") else "coreos"
 
 
-def progress(pct, msg):
-    set_state(percent=int(pct), message=msg)
-    log_line(f"[{pct}%] {msg}")
+def sanitize_host(value):
+    value = re.sub(r"[^a-zA-Z0-9-]", "", value or "")
+    return value.strip("-") or "core-os"
 
 
 def install(opts):
     disk = opts["disk"]
-    user = re.sub(r"[^a-z0-9_-]", "", (opts.get("user") or "coreos").lower()) or "coreos"
+    user = sanitize_user(opts.get("user"))
     password = opts.get("password") or "coreos"
-    hostname = re.sub(r"[^a-zA-Z0-9-]", "", (opts.get("hostname") or "core-os")) or "core-os"
-    lang = opts.get("lang") or "es"
-    layout = opts.get("layout") or "es"
+    hostname = sanitize_host(opts.get("hostname"))
+    locale = opts.get("locale") or "es_ES.UTF-8"
+    keymap = opts.get("keymap") or "es"
     timezone = opts.get("timezone") or "Europe/Madrid"
 
     uefi = is_uefi()
-    log_line(f"Modo de arranque: {'UEFI' if uefi else 'BIOS/legacy'}")
+    log_line("=" * 62)
+    log_line("Instalación de Core OS")
+    log_line("=" * 62)
+    log_line(f"  Disco:        {disk}")
+    log_line(f"  Arranque:     {'UEFI' if uefi else 'BIOS (MBR)'}")
+    log_line(f"  Usuario:      {user}")
+    log_line(f"  Equipo:       {hostname}")
+    log_line(f"  Idioma:       {locale}")
+    log_line(f"  Teclado:      {keymap}")
+    log_line(f"  Zona horaria: {timezone}")
 
-    # --- 1. Particionado ---------------------------------------------------
+    # --- 1. Preparar el disco ---------------------------------------------
     progress(3, "Preparando el disco…")
-    run(["umount", "-R", TARGET], check=False)
-    run(["swapoff", "-a"], check=False)
-    run(["sgdisk", "--zap-all", disk])
+    sh(["umount", "-R", TARGET], check=False, quiet=True)
+    sh(["swapoff", "-a"], check=False, quiet=True)
+    sh(["sgdisk", "--zap-all", disk])
 
+    esp = None
     if uefi:
-        run(["sgdisk", "-n", "1:0:+512M", "-t", "1:ef00", "-c", "1:EFI System", disk])
-        run(["sgdisk", "-n", "2:0:0", "-t", "2:8300", "-c", "2:Core OS", disk])
-        esp, root = part_name(disk, 1), part_name(disk, 2)
+        sh(["sgdisk", "-n", "1:0:+512M", "-t", "1:ef00", "-c", "1:COREOS-EFI", disk])
+        sh(["sgdisk", "-n", "2:0:0", "-t", "2:8300", "-c", "2:Core OS", disk])
+        esp, root = partition_path(disk, 1), partition_path(disk, 2)
     else:
-        run(["sgdisk", "-n", "1:0:+2M", "-t", "1:ef02", "-c", "1:BIOS boot", disk])
-        run(["sgdisk", "-n", "2:0:0", "-t", "2:8300", "-c", "2:Core OS", disk])
-        esp, root = None, part_name(disk, 2)
+        sh(["sgdisk", "-n", "1:0:+2M", "-t", "1:ef02", "-c", "1:Core OS BIOS", disk])
+        sh(["sgdisk", "-n", "2:0:0", "-t", "2:8300", "-c", "2:Core OS", disk])
+        root = partition_path(disk, 2)
 
-    run(["partprobe", disk], check=False)
+    sh(["partprobe", disk], check=False)
     time.sleep(2)
 
-    # --- 2. Formateo -------------------------------------------------------
-    progress(8, "Formateando…")
-    run(["mkfs.ext4", "-F", "-L", "CoreOS", root])
+    # --- 2. Formatear ------------------------------------------------------
+    progress(8, "Formateando las particiones…")
+    sh(["mkfs.ext4", "-F", "-L", "CoreOS", root])
     if esp:
-        run(["mkfs.vfat", "-F32", "-n", "COREOS-EFI", esp])
+        sh(["mkfs.vfat", "-F32", "-n", "COREOS-EFI", esp])
 
-    # --- 3. Montaje --------------------------------------------------------
+    # --- 3. Montar ---------------------------------------------------------
     progress(12, "Montando el sistema de archivos…")
     os.makedirs(TARGET, exist_ok=True)
-    run(["mount", root, TARGET])
+    sh(["mount", root, TARGET])
     if esp:
         os.makedirs(os.path.join(TARGET, "boot/efi"), exist_ok=True)
-        run(["mount", esp, os.path.join(TARGET, "boot/efi")])
+        sh(["mount", esp, os.path.join(TARGET, "boot/efi")])
 
-    # --- 4. Copia del sistema ---------------------------------------------
-    progress(16, "Copiando Core OS al disco (esto tarda unos minutos)…")
+    # --- 4. Copiar Core OS -------------------------------------------------
+    progress(16, "Copiando Core OS al disco (varios minutos)…")
     excludes = [
         "/proc/*", "/sys/*", "/dev/*", "/run/*", "/tmp/*", "/mnt/*",
-        "/media/*", "/cdrom/*", "/target/*", "/lost+found",
-        "/var/cache/apt/archives/*", "/var/lib/docker/*", "/swapfile",
+        "/media/*", "/lost+found", "/target/*", "/cdrom/*",
+        "/var/cache/pacman/pkg/*", "/var/lib/docker/*", "/swapfile",
         "/etc/resolv.conf",
     ]
     cmd = ["rsync", "-aHAX", "-x", "--info=progress2", "--no-inc-recursive"]
-    for e in excludes:
-        cmd += ["--exclude", e]
+    for pattern in excludes:
+        cmd += ["--exclude", pattern]
     cmd += ["/", TARGET + "/"]
+
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in proc.stdout:
-        m = re.search(r"(\d+)%", line)
-        if m:
-            pct = 16 + int(m.group(1)) * 0.44  # 16% -> 60%
-            set_state(percent=int(pct), message="Copiando Core OS al disco…")
+        match = re.search(r"(\d+)%", line)
+        if match:
+            set_state(percent=int(16 + int(match.group(1)) * 0.40),
+                      message="Copiando Core OS al disco…")
     proc.wait()
     if proc.returncode != 0:
-        raise RuntimeError("rsync falló al copiar el sistema")
+        raise RuntimeError("La copia del sistema (rsync) falló")
     log_line("Copia completada")
 
-    # --- 5. Configuración del sistema destino -----------------------------
-    progress(62, "Configurando el sistema…")
-    for m in ("proc", "sys", "dev", "dev/pts", "run"):
-        os.makedirs(os.path.join(TARGET, m), exist_ok=True)
-        run(["mount", "--bind", f"/{m}", f"{TARGET}/{m}"], check=False)
-
-    # DNS para el sistema destino (por si instala paquetes).
-    run(["cp", "-f", "/etc/resolv.conf", f"{TARGET}/etc/resolv.conf"], check=False)
-
-    # fstab con UUIDs
-    def uuid(dev):
-        return subprocess.run(["blkid", "-s", "UUID", "-o", "value", dev],
-                              capture_output=True, text=True).stdout.strip()
-
-    fstab = [f"UUID={uuid(root)}  /  ext4  defaults,noatime  0 1"]
-    if esp:
-        fstab.append(f"UUID={uuid(esp)}  /boot/efi  vfat  umask=0077  0 1")
-    with open(os.path.join(TARGET, "etc/fstab"), "w") as fh:
-        fh.write("\n".join(fstab) + "\n")
-
-    run_chroot(f"echo {hostname} > /etc/hostname")
-    run_chroot(
-        f"printf '127.0.0.1 localhost\\n127.0.1.1 {hostname}\\n' > /etc/hosts"
-    )
-    run_chroot(f"ln -sf /usr/share/zoneinfo/{timezone} /etc/localtime")
-    run_chroot("hwclock --systohc || true")
-
-    locale = "es_ES.UTF-8" if lang == "es" else "en_US.UTF-8"
-    run_chroot(f"locale-gen {locale} || true")
-    run_chroot(f"printf 'LANG={locale}\\nLC_ALL={locale}\\n' > /etc/default/locale")
-    run_chroot(f"printf 'XKBLAYOUT=\"{layout}\"\\nXKBVARIANT=\"\"\\nBACKSPACE=\"guess\"\\n' > /etc/default/keyboard")
-
-    # --- 6. Usuario --------------------------------------------------------
-    progress(70, "Creando la cuenta de usuario…")
-    # Primero se eliminan los usuarios del MEDIO EN VIVO ('core' lo crea Core OS
-    # y 'ubuntu' lo intenta crear casper): tienen sudo sin contraseña y no deben
-    # quedar en el sistema instalado. Se hace ANTES de crear la cuenta del
-    # usuario para que esta reciba el UID 1000.
-    run_chroot("userdel -r core 2>/dev/null || true")
-    run_chroot("userdel -r ubuntu 2>/dev/null || true")
-    run_chroot("userdel -r coreadmin 2>/dev/null || true")
-    run_chroot("rm -f /etc/sudoers.d/casper /etc/sudoers.d/90-core-os-live || true")
-    # Sin autologin en el sistema final: se entra con la contraseña elegida.
-    run_chroot("printf '[daemon]\\nAutomaticLoginEnable=false\\n' > /etc/gdm3/custom.conf || true")
-    # Elimina el asistente del sistema instalado (solo vive en el medio).
-    run_chroot("rm -f /etc/xdg/autostart/core-os-setup.desktop || true")
-    run_chroot(f"id {user} >/dev/null 2>&1 || adduser --disabled-password "
-               f"--gecos \"{user}\" {user}")
-    run_chroot(f"usermod -aG sudo,adm,docker {user} || usermod -aG sudo,adm {user}")
-    safe_pw = password.replace("'", "'\\''")
-    run_chroot(f"echo '{user}:{safe_pw}' | chpasswd")
-    run_chroot(f"chage -d \"$(date +%Y-%m-%d)\" -m 0 -M 99999 -I -1 -E -1 {user}")
-
-    # --- 7. Gestor de arranque --------------------------------------------
-    progress(80, "Instalando el gestor de arranque (GRUB)…")
-    if uefi:
-        run_chroot('grub-install --target=x86_64-efi --efi-directory=/boot/efi '
-                   '--bootloader-id="Core OS" --recheck')
-        # Ruta de respaldo para medios extraíbles.
-        run_chroot('mkdir -p /boot/efi/EFI/BOOT && '
-                   'cp -f /boot/efi/EFI/CoreOS/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI '
-                   '2>/dev/null || true')
+    # --- 5. Sistema de archivos / fstab -----------------------------------
+    progress(58, "Configurando el sistema…")
+    if have("genfstab"):
+        fstab = subprocess.run(["genfstab", "-U", TARGET],
+                               capture_output=True, text=True).stdout
+        if fstab.strip():
+            with open(os.path.join(TARGET, "etc/fstab"), "w") as fh:
+                fh.write(fstab)
+            log_line("fstab generado con genfstab")
+        else:
+            raise RuntimeError("genfstab no devolvió ninguna entrada")
     else:
-        run_chroot(f'grub-install --target=i386-pc --recheck --boot-directory=/boot {disk}')
-    run_chroot("update-grub")
+        def uuid_of(dev):
+            return subprocess.run(["blkid", "-s", "UUID", "-o", "value", dev],
+                                  capture_output=True, text=True).stdout.strip()
+        lines = [f"UUID={uuid_of(root)}  /  ext4  rw,relatime  0 1"]
+        if esp:
+            lines.append(f"UUID={uuid_of(esp)}  /boot/efi  vfat  umask=0077  0 2")
+        with open(os.path.join(TARGET, "etc/fstab"), "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+        log_line("fstab generado manualmente")
 
-    # --- 8. Servicios ------------------------------------------------------
-    progress(92, "Habilitando servicios…")
-    run_chroot("systemctl enable gdm3 ssh || true")
-    run_chroot("systemctl set-default graphical.target || true")
-    run_chroot("install -d /var/lib && touch /var/lib/core-os-installed")
+    # --- 6. Kernel del sistema instalado ----------------------------------
+    progress(62, "Instalando el kernel en el disco…")
+    copy_kernel_to_target()
 
-    # --- 9. Limpieza -------------------------------------------------------
-    progress(96, "Finalizando…")
-    run(["sync"])
-    for m in ("dev/pts", "dev", "sys", "proc", "run"):
-        run(["umount", "-l", f"{TARGET}/{m}"], check=False)
-    if esp:
-        run(["umount", "-l", f"{TARGET}/boot/efi"], check=False)
-    run(["umount", "-l", TARGET], check=False)
+    # --- 7. Ajustes básicos del sistema -----------------------------------
+    progress(66, "Aplicando idioma, teclado y zona horaria…")
+    sh(["ln", "-sf", f"../usr/lib/os-release", f"{TARGET}/etc/os-release"], check=False)
+    in_target(f"printf '%s\\n' '{hostname}' > /etc/hostname")
+    in_target(
+        "printf '127.0.0.1\\tlocalhost\\n::1\\t\\tlocalhost\\n"
+        f"127.0.1.1\\t{hostname}.localdomain\\t{hostname}\\n' > /etc/hosts"
+    )
+    in_target(f"ln -sf /usr/share/zoneinfo/{timezone} /etc/localtime")
+    in_target("hwclock --systohc --utc || true", check=False)
+    in_target(
+        f"sed -i 's|^#\\({locale.replace('.', r'\.')}\\)|\\1|' /etc/locale.gen; "
+        f"grep -qx '{locale}' /etc/locale.gen || echo '{locale}' >> /etc/locale.gen; "
+        "locale-gen",
+        check=False,
+    )
+    in_target(f"printf 'LANG={locale}\\n' > /etc/locale.conf")
+    in_target(f"printf 'KEYMAP={keymap}\\nFONT=lat9w-16\\n' > /etc/vconsole.conf")
+    keymap_conf = os.path.join(TARGET, "etc/X11/xorg.conf.d/00-core-os-keyboard.conf")
+    os.makedirs(os.path.dirname(keymap_conf), exist_ok=True)
+    with open(keymap_conf, "w") as fh:
+        fh.write(
+            '# Core OS — teclado elegido durante la instalación.\n'
+            'Section "InputClass"\n'
+            '    Identifier "core-os-keyboard"\n'
+            '    MatchIsKeyboard "on"\n'
+            f'    Option "XkbLayout" "{keymap}"\n'
+            '    Option "XkbVariant" ""\n'
+            'EndSection\n'
+        )
 
-    progress(100, "Instalación completada")
+    # --- 8. Quitar los restos del medio en vivo ----------------------------
+    progress(72, "Retirando los restos del medio en vivo…")
+    # Usuario y permisos del medio en vivo
+    in_target(f"userdel -r {user} 2>/dev/null || true", check=False)
+    in_target("userdel -r core 2>/dev/null || true", check=False)
+    in_target("rm -f /etc/sudoers.d/90-core-os-live")
+    # Consolas automáticas (solo tienen sentido en el medio en vivo)
+    in_target("rm -rf /etc/systemd/system/serial-getty@ttyS0.service.d "
+              "/etc/systemd/system/getty@tty2.service.d")
+    in_target("systemctl disable serial-getty@ttyS0.service getty@tty2.service",
+              check=False)
+    # Sin inicio de sesión automático en el sistema final
+    in_target("printf '[daemon]\\nAutomaticLoginEnable=false\\n\\n"
+              "[security]\\n\\n[xdmcp]\\n\\n[chooser]\\n\\n[debug]\\n' "
+              "> /etc/gdm/custom.conf")
+    # El asistente de instalación no se copia al sistema instalado
+    in_target("systemctl disable core-os-setupd.service", check=False)
+    in_target("rm -f /etc/systemd/system/core-os-setupd.service "
+              "/etc/xdg/autostart/core-os-setup.desktop "
+              "/usr/local/bin/core-os-setup "
+              "/usr/share/applications/core-os-setup.desktop")
+    in_target("rm -rf /usr/lib/core-os/setup")
+    # Restos propios de archiso (initramfs y servicios del medio en vivo)
+    in_target("rm -f /etc/mkinitcpio.conf.d/archiso.conf")
+    in_target("systemctl disable pacman-init.service etc-pacman.d-gnupg.mount",
+              check=False)
+    in_target("rm -f /etc/systemd/system/pacman-init.service "
+              "/etc/systemd/system/etc-pacman.d-gnupg.mount")
+    # Los ganchos de pacman de la ISO no deben quedarse en el sistema instalado
+    in_target("rm -f /etc/pacman.d/hooks/uncomment-mirrors.hook "
+              "/etc/pacman.d/hooks/zzzz99-remove-custom-hooks-from-airootfs.hook")
+
+    # --- 9. Cuenta de usuario ---------------------------------------------
+    progress(78, f"Creando la cuenta «{user}»…")
+    in_target(
+        f"id {user} >/dev/null 2>&1 || useradd --create-home --shell /bin/bash "
+        f"--comment '{user}' {user}"
+    )
+    in_target(
+        "for g in wheel audio video optical storage power network rfkill lp "
+        f"input games kvm docker adm; do getent group \"$g\" >/dev/null && "
+        f"usermod -aG \"$g\" {user}; done"
+    )
+    # La contraseña se pasa por STDIN: nunca aparece en el registro.
+    log_line("$ chpasswd  (contraseña oculta)")
+    result = subprocess.run(["arch-chroot", TARGET, "chpasswd"],
+                            input=f"{user}:{password}\n", capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError("No se pudo establecer la contraseña del usuario")
+    in_target(f"chage -d \"$(date +%Y-%m-%d)\" -m 0 -M 99999 -I -1 -E -1 {user}")
+    in_target("install -d -m 0755 /etc/sudoers.d")
+    in_target("printf '# Core OS — el grupo wheel administra el sistema.\\n"
+              "%%wheel ALL=(ALL:ALL) ALL\\n' > /etc/sudoers.d/10-core-os")
+    in_target("chmod 0440 /etc/sudoers.d/10-core-os")
+
+    # --- 10. Initramfs -----------------------------------------------------
+    progress(84, "Generando el initramfs del sistema instalado…")
+    in_target("mkinitcpio -P")
+
+    # --- 11. Gestor de arranque -------------------------------------------
+    progress(90, "Instalando el gestor de arranque (GRUB)…")
+    # Tema de arranque de Core OS
+    in_target("install -d -m 0755 /boot/grub/themes/core-os")
+    in_target("cp -f /usr/share/core-os/grub-theme/* /boot/grub/themes/core-os/ "
+              "2>/dev/null || true", check=False)
+    if uefi:
+        in_target('grub-install --target=x86_64-efi --efi-directory=/boot/efi '
+                  '--bootloader-id="Core OS" --recheck')
+        # Ruta de respaldo del firmware (medios extraíbles)
+        in_target('install -d -m 0755 /boot/efi/EFI/BOOT && '
+                  'cp -f /boot/efi/EFI/CoreOS/grubx64.efi '
+                  '/boot/efi/EFI/BOOT/BOOTX64.EFI 2>/dev/null || true', check=False)
+    else:
+        in_target(f"grub-install --target=i386-pc --recheck --boot-directory=/boot {disk}")
+    in_target("grub-mkconfig -o /boot/grub/grub.cfg")
+
+    # --- 12. Servicios y limpieza final ------------------------------------
+    progress(96, "Habilitando los servicios del sistema…")
+    in_target("systemctl enable gdm.service NetworkManager.service "
+              "bluetooth.service cups.socket core-os-web-demo.service "
+              "systemd-timesyncd.service fstrim.timer", check=False)
+    in_target("systemctl set-default graphical.target", check=False)
+    in_target("install -d -m 0755 /var/lib && "
+              "printf 'Core OS %s\\n' \"$(sed -n 's/^CORE_OS_RELEASE=\"\\(.*\\)\"/\\1/p' "
+              "/etc/core-os/release)\" > /var/lib/core-os-installed")
+    sh(["sync"])
+    in_target("rm -f /etc/resolv.conf && "
+              "ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf", check=False)
+
+    # --- 13. Desmontar -----------------------------------------------------
+    sh(["umount", "-R", TARGET], check=False, quiet=True)
+    time.sleep(1)
+
+    progress(100, "¡Core OS se ha instalado correctamente!")
     set_state(done=True, message="Instalación completada")
 
 
 def install_thread(opts):
-    set_state(running=True, done=False, error=None, log=[], percent=0)
+    set_state(running=True, done=False, error=None, log=[], percent=0,
+              message="Iniciando la instalación…")
     try:
         install(opts)
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:  # noqa: BLE001
         log_line("ERROR: " + str(exc))
         set_state(error=str(exc), message="Error: " + str(exc))
     finally:
@@ -280,13 +437,13 @@ def install_thread(opts):
 
 
 # ---------------------------------------------------------------------------
-# Servidor HTTP local (interfaz + API)
+# API local
 # ---------------------------------------------------------------------------
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=UI_DIR, **kwargs)
 
-    def log_message(self, *args):  # silencio
+    def log_message(self, *args):
         pass
 
     def _json(self, obj, code=200):
@@ -298,8 +455,12 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path.startswith("/api/disks"):
-            return self._json({"disks": list_disks(), "uefi": is_uefi()})
+        if self.path.startswith("/api/system"):
+            return self._json({
+                "uefi": is_uefi(),
+                "disks": list_disks(),
+                "version": _core_os_version(),
+            })
         if self.path.startswith("/api/progress"):
             with _LOCK:
                 return self._json(dict(STATE))
@@ -309,7 +470,7 @@ class Handler(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         data = json.loads(self.rfile.read(length) or b"{}") if length else {}
         if self.path.startswith("/api/install"):
-            if not STATE["running"]:
+            if not STATE["running"] and not STATE["done"]:
                 threading.Thread(target=install_thread, args=(data,), daemon=True).start()
             return self._json({"ok": True})
         if self.path.startswith("/api/reboot"):
@@ -318,57 +479,74 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
 
+def _core_os_version():
+    try:
+        with open("/etc/core-os/release") as fh:
+            for line in fh:
+                if line.startswith("CORE_OS_RELEASE="):
+                    return line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+    return "1.0.0"
+
+
 def start_server():
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return srv
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    log_line(f"API del instalador escuchando en 127.0.0.1:{PORT}")
+    return server
 
 
+# ---------------------------------------------------------------------------
+# Interfaz gráfica (WebKit2GTK)
+# ---------------------------------------------------------------------------
 def open_window():
-    """Abre la ventana del asistente (WebKit2GTK) apuntando al servidor local."""
     try:
         import gi
         gi.require_version("Gtk", "3.0")
         gi.require_version("WebKit2", "4.1")
         from gi.repository import Gtk, WebKit2  # noqa: E402
-    except Exception as exc:  # WebKit no disponible
-        print(f"[core-os-setup] WebKit no disponible ({exc}); abre "
-              f"http://127.0.0.1:{PORT} manualmente", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[core-os-setup] WebKit no disponible ({exc}). "
+              f"Abre http://127.0.0.1:{PORT} en un navegador.", file=sys.stderr)
         while True:
             time.sleep(3600)
 
     url = f"http://127.0.0.1:{PORT}/index.html"
-    win = Gtk.Window(title="Instalación de Core OS")
-    win.set_decorated(False)
-    win.fullscreen()
-    win.connect("destroy", Gtk.main_quit)
+    window = Gtk.Window(title="Instalación de Core OS")
+    window.set_decorated(False)
+    window.fullscreen()
+    window.connect("destroy", Gtk.main_quit)
+
     view = WebKit2.WebView()
 
-    def on_fail(_view, _event, _uri, error):
-        # El servicio puede tardar un instante en estar listo: reintenta.
-        print(f"[core-os-setup] reintentando ({error.message})", file=sys.stderr)
+    def on_load_failed(_view, _event, _uri, error):
+        print(f"[core-os-setup] recargando ({error.message})", file=sys.stderr)
         time.sleep(1)
         _view.load_uri(url)
         return True
 
-    view.connect("load-failed", on_fail)
+    view.connect("load-failed", on_load_failed)
     view.load_uri(url)
-    win.add(view)
-    win.show_all()
+    window.add(view)
+    window.show_all()
     Gtk.main()
 
 
 def main():
     args = sys.argv[1:]
     if "--server-only" in args:
-        # Servicio en segundo plano (root): expone la API de instalación.
+        # Servicio en segundo plano (root): expone la API y sirve la interfaz.
         start_server()
-        log_line("Servidor del instalador listo en 127.0.0.1:%d" % PORT)
         threading.Event().wait()
         return
-    if "--ui-only" not in args:
-        # Uso manual: levanta el servidor y muestra la interfaz.
-        start_server()
+    if "--ui-only" in args:
+        # La ventana la abre el usuario del medio en vivo y la interfaz se
+        # sirve desde el servicio (root) que ya escucha en el puerto.
+        open_window()
+        return
+    # Uso manual (desarrollo): servidor + ventana en el mismo proceso.
+    start_server()
     open_window()
 
 

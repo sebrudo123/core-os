@@ -17,7 +17,8 @@
     "core-os",
     "dashboard",
     "admin",
-    "ubuntu",
+    "arch",
+    "archlinux",
     "casaos"
   ],
   "dependencies": {

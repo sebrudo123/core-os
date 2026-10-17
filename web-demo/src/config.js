@@ -34,7 +34,7 @@ export const config = {
   coreOs: {
     name: 'Core OS',
     release: process.env.CORE_OS_RELEASE || '1.0.0',
-    base: process.env.CORE_OS_BASE || 'Ubuntu 24.04 LTS (noble)',
+    base: process.env.CORE_OS_BASE || 'Arch Linux',
     repository: process.env.CORE_OS_REPOSITORY || 'https://github.com/sebrudo123/core-os',
   },
 

@@ -1,27 +1,18 @@
 name: Build Core OS ISO
 
-# Se ejecuta en cada push a main, en tags v* y manualmente.
+# Construye la ISO de Core OS (Arch Linux + GNOME) en cada push a main, en los
+# tags v* y a mano. En los tags v* además publica una Release con la ISO.
 on:
   push:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      ubuntu_release:
-        description: 'Release de Ubuntu base'
-        required: true
-        default: '24.04'
-      ubuntu_codename:
-        description: 'Codename de Ubuntu base'
-        required: true
-        default: 'noble'
       build_iso:
-        description: 'Construir la ISO completa (consume ~20GB / 30min)'
+        description: 'Construir la ISO (tarda ~40 min); desmárcalo para validar solo'
         type: boolean
-        required: true
         default: true
 
-# Evita builds concurrentes del mismo ref.
 concurrency:
   group: build-iso-${{ github.ref }}
   cancel-in-progress: true
@@ -30,13 +21,11 @@ permissions:
   contents: write
 
 env:
-  UBUNTU_RELEASE: ${{ github.event.inputs.ubuntu_release || '24.04' }}
-  UBUNTU_CODENAME: ${{ github.event.inputs.ubuntu_codename || 'noble' }}
   CORE_OS_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.0.0+{0}', github.run_number) }}
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Validación rápida de la personalización
+  # 1. Validación (rápida): scripts, asistente y perfil de archiso
   # ---------------------------------------------------------------------------
   validate:
     runs-on: ubuntu-24.04
@@ -46,121 +35,77 @@ jobs:
       - name: Instalar shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
-      - name: Analizar scripts de personalización
-        run: shellcheck -x -S warning customization/scripts/*.sh customization/build-iso.sh
-
-      - name: Validar scripts con "bash -n"
+      - name: Analizar los scripts de Core OS con shellcheck
         run: |
-          for f in customization/scripts/*.sh customization/build-iso.sh; do
-            echo "-> syntax check $f"
-            bash -n "$f"
-          done
+          shellcheck -x -S warning \
+            customization/arch/scripts/*.sh \
+            customization/arch/scripts/lib/*.sh \
+            customization/arch/*.sh \
+            customization/archiso/airootfs/root/customize_airootfs.sh \
+            customization/archiso/profiledef.sh
 
-      - name: Validar listas de paquetes
-        run: |
-          test -s customization/packages/packages.list
-          grep -vE '^\s*(#|$)' customization/packages/packages.list
+      - name: Comprobar el asistente de instalación
+        run: python3 -m py_compile customization/setup/core-os-setup.py
 
-      - name: Validar el asistente de instalación
-        run: |
-          python3 -m py_compile customization/setup/core-os-setup.py
-          test -f customization/setup/ui/index.html
-          test -f customization/setup/ui/style.css
-          test -f customization/setup/ui/app.js
-          test -f customization/setup/ui/logo.png
-          echo "asistente de instalación OK"
+      - name: Comprobar el perfil y los archivos de Core OS
+        run: bash customization/arch/check.sh
 
   # ---------------------------------------------------------------------------
-  # 2. Empaquetado de la personalización (artefacto ligero, siempre disponible)
-  # ---------------------------------------------------------------------------
-  package:
-    runs-on: ubuntu-24.04
-    needs: validate
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Empaquetar customization/ + web-demo/
-        run: |
-          tar \
-            --exclude='customization/out' \
-            --exclude='customization/work' \
-            --exclude='customization/cache' \
-            --exclude='web-demo/node_modules' \
-            --exclude='web-demo/.vercel' \
-            -czf "core-os-source-${CORE_OS_VERSION}.tar.gz" \
-            customization web-demo
-
-      - name: Subir artefacto de personalización
-        uses: actions/upload-artifact@v4
-        with:
-          name: core-os-source-${{ env.CORE_OS_VERSION }}
-          path: core-os-source-*.tar.gz
-          if-no-files-found: error
-          retention-days: 30
-
-  # ---------------------------------------------------------------------------
-  # 3. Construcción de la ISO (headless, sin Cubic)
+  # 2. Construcción de la ISO dentro de un contenedor Arch Linux
   # ---------------------------------------------------------------------------
   build-iso:
     runs-on: ubuntu-24.04
-    needs: package
+    needs: validate
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_iso }}
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
-      # Libera espacio: los runners traen ~14GB útiles y una ISO de escritorio
-      # necesita ~30GB (ISO + árbol extraído + squashfs). Se eliminan los
-      # toolchains preinstalados que no usamos.
-      - name: Liberar espacio en disco
+      - name: Ampliar el espacio disponible
         run: |
-          echo "Antes:"; df -h /
-          sudo rm -rf /usr/share/dotnet \
-                      /usr/local/lib/android \
-                      /opt/ghc \
-                      /opt/hostedtoolcache/CodeQL \
-                      /usr/local/share/boost \
-                      /usr/local/.ghcup \
-                      /usr/share/swift \
-                      /opt/az \
-                      /usr/local/lib/node_modules \
-                      "$AGENT_TOOLSDIRECTORY" || true
+          echo "Antes:"; df -h / /mnt || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/local/.ghcup \
+            /usr/share/swift /opt/az /usr/local/lib/node_modules || true
           sudo apt-get clean
-          sudo apt-get autoremove -y || true
-          sudo docker image prune -a -f 2>/dev/null || true
-          echo "Después:"; df -h /
+          # El volumen /mnt es mucho mayor que /: ahí van los datos del build.
+          sudo mkdir -p /mnt/core-os-build
+          sudo chown -R "$USER" /mnt/core-os-build
+          echo "Después:"; df -h / /mnt || true
 
-      - name: Instalar dependencias de construcción
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            xorriso squashfs-tools rsync wget ca-certificates \
-            isolinux syslinux-utils genisoimage
-
-      - name: Construir la ISO de Core OS
+      - name: Construir la ISO (contenedor Arch Linux)
         env:
-          CORE_OS_RELEASE: ${{ env.CORE_OS_VERSION }}
-          UBUNTU_RELEASE: ${{ env.UBUNTU_RELEASE }}
-          UBUNTU_CODENAME: ${{ env.UBUNTU_CODENAME }}
-          # gzip es más rápido que xz (menos riesgo de agotar el tiempo del job).
-          CORE_OS_SQUASHFS_COMP: gzip
+          OUT_DIR: /build/out
+          WORK_DIR: /build/work
         run: |
-          sudo --preserve-env=CORE_OS_RELEASE,UBUNTU_RELEASE,UBUNTU_CODENAME,CORE_OS_SQUASHFS_COMP \
-            ./customization/build-iso.sh --release "${CORE_OS_RELEASE}"
+          set -euo pipefail
+          docker run --rm --privileged \
+            -v "$PWD":/work -w /work \
+            -v /mnt/core-os-build:/build \
+            -e OUT_DIR=/build/out \
+            -e WORK_DIR=/build/work \
+            -e CORE_OS_VERSION="$CORE_OS_VERSION" \
+            -e SOURCE_DATE_EPOCH="$(date +%s)" \
+            archlinux:latest \
+            bash -c '
+              set -euo pipefail
+              pacman-key --init
+              pacman-key --populate archlinux
+              pacman -Syu --noconfirm --needed archiso libisoburn squashfs-tools \
+                dosfstools mtools grub syslinux
+              ./customization/arch/build-iso.sh
+            '
 
-      - name: Generar checksums
+      - name: Recoger el resultado
         run: |
-          cd customization/out
-          # El árbol lo crea root al construir con sudo; se generan los checksums
-          # como root y se devuelve la propiedad del directorio al runner para
-          # poder dividir/subir la ISO más adelante.
-          sudo sh -c 'sha256sum ./*.iso > SHA256SUMS'
-          sudo chown -R "$USER" . 2>/dev/null || true
-          cat SHA256SUMS
+          set -euo pipefail
+          mkdir -p customization/out
+          cp -v /mnt/core-os-build/out/*.iso customization/out/
+          cp -v /mnt/core-os-build/out/SHA256SUMS customization/out/
+          ls -lh customization/out
+          cat customization/out/SHA256SUMS
 
-      # Nota: una ISO de ~6 GB supera la cuota de artefactos de GitHub para
-      # muchos planes, por eso la subida es "mejor esfuerzo" (no rompe el build).
-      - name: Subir la ISO (mejor esfuerzo)
+      - name: Guardar la ISO como artefacto (por si la Release no aplica)
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -168,31 +113,95 @@ jobs:
           path: |
             customization/out/*.iso
             customization/out/SHA256SUMS
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
-      # En las etiquetas v* se publica una Release. GitHub limita cada asset a
-      # 2 GB, así que la ISO se divide en partes de <2 GB.
-      - name: Preparar assets de la Release (solo en tags v*)
+      # GitHub limita cada archivo de una Release a 2 GB: si la ISO los supera
+      # se publica dividida en partes y se explica cómo unirla.
+      - name: Preparar los archivos de la Release
         if: startsWith(github.ref, 'refs/tags/v')
-        continue-on-error: true
+        id: assets
         run: |
+          set -euo pipefail
           cd customization/out
-          rm -f core-os-part-* PARTS-SHA256SUMS
-          iso="$(ls ./*.iso | head -1)"
-          split -b 1900M --numeric-suffixes=1 --suffix-length=2 \
-            --additional-suffix=.part "$iso" core-os-part-
-          sha256sum core-os-part-* > PARTS-SHA256SUMS
-          ls -lh core-os-part-* PARTS-SHA256SUMS
+          iso="$(ls -1 ./*.iso | head -1)"
+          size="$(stat -c%s "$iso")"
+          echo "ISO: ${iso} ($((size / 1048576)) MB)"
+          if [ "$size" -lt 1900000000 ]; then
+            {
+              echo "files<<ASSETS_EOF"
+              echo "$iso"
+              echo "SHA256SUMS"
+              echo "ASSETS_EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "info=La ISO cabe en un único archivo." >> "$GITHUB_OUTPUT"
+          else
+            split -b 1900M --numeric-suffixes=1 --suffix-length=2 \
+              --additional-suffix=.part "$iso" core-os-part-
+            sha256sum core-os-part-* > PARTS-SHA256SUMS
+            rm -f "$iso"
+            {
+              echo "files<<ASSETS_EOF"
+              ls -1 core-os-part-*
+              echo "PARTS-SHA256SUMS"
+              echo "ASSETS_EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "info=La ISO supera los 2 GB de GitHub: se publica en partes." >> "$GITHUB_OUTPUT"
+          fi
+          ls -lh
 
-      - name: Publicar Release (solo en tags v*)
+      - name: Publicar la Release
         if: startsWith(github.ref, 'refs/tags/v')
-        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           name: Core OS ${{ github.ref_name }}
           generate_release_notes: true
-          files: |
-            customization/out/core-os-part-*
-            customization/out/PARTS-SHA256SUMS
-            customization/out/SHA256SUMS
+          body: |
+            ## Core OS ${{ github.ref_name }}
+
+            Sistema operativo basado en **Arch Linux** con escritorio GNOME y
+            aspecto tipo Windows 11.
+
+            ${{ steps.assets.outputs.info }}
+
+            **Descarga y comprobación**
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            ```
+
+            Si la Release incluye archivos `core-os-part-*.part`, únelos antes de
+            usar la ISO:
+
+            ```bash
+            cat core-os-part-*.part > core-os.iso
+            sha256sum -c PARTS-SHA256SUMS
+            ```
+
+            **Requisitos:** 64 bits, 4 GB de RAM (8 GB recomendable) y 25 GB de disco.
+          files: ${{ steps.assets.outputs.files }}
+
+  # ---------------------------------------------------------------------------
+  # 3. Código fuente de Core OS (artefacto ligero)
+  # ---------------------------------------------------------------------------
+  package:
+    runs-on: ubuntu-24.04
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Empaquetar la personalización
+        run: |
+          tar \
+            --exclude='customization/out' \
+            --exclude='customization/work' \
+            --exclude='web-demo/node_modules' \
+            -czf "core-os-source-${CORE_OS_VERSION}.tar.gz" \
+            customization web-demo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-os-source-${{ env.CORE_OS_VERSION }}
+          path: core-os-source-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30

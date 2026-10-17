@@ -1,10 +1,12 @@
 # ===========================================================================
-#  core-os-web-demo.service — Panel de administración web de Core OS.
-#  Se instala en /etc/systemd/system/core-os-web-demo.service
-#  y se habilita en el arranque por customization/scripts/45-web-demo.sh
+#  core-os-web-demo.service — Panel de administración de Core OS.
+#
+#  Es la MISMA aplicación que se despliega en la web (web-demo/), pero aquí se
+#  ejecuta dentro del sistema con las métricas REALES del equipo.
+#  Instalado por customization/arch/scripts/45-web-demo.sh
 # ===========================================================================
 [Unit]
-Description=Core OS Web Demo (panel de administración)
+Description=Core OS — panel de administración (web)
 Documentation=https://github.com/sebrudo123/core-os
 After=network-online.target
 Wants=network-online.target
@@ -12,7 +14,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/usr/lib/core-os/web-demo
-# La configuración vive en /etc/core-os/web-demo.env
 EnvironmentFile=-/etc/core-os/web-demo.env
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
@@ -20,7 +21,8 @@ RestartSec=3
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=core-os-web-demo
-# Endurecimiento básico
+
+# Endurecimiento básico (no necesita privilegios para leer las métricas).
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=true

@@ -1,142 +1,238 @@
-/* Core OS Setup — lógica del asistente (estilo Windows 11) */
-(() => {
-  const PAGES = ["lang", "start", "disk", "account", "progress", "done", "error"];
-  const PERCENT_STEP = { lang: 1, start: 1, disk: 2, account: 3, progress: 4, done: 4 };
-  const slides = [
-    "Tu sistema, tus reglas.",
-    "Un escritorio propio, inspirado en lo mejor de cada mundo.",
-    "Panel de administración integrado en http://localhost:8080",
-    "Aplicaciones con Flatpak, sin ataduras.",
-    "Arranque rápido y sin telemetría.",
-    "Todo listo en unos minutos.",
-  ];
+/* ==========================================================================
+   Core OS Setup — lógica de la interfaz (asistente de 4 pasos)
+   ========================================================================== */
+'use strict';
 
-  const $ = (id) => document.getElementById(id);
-  let current = "lang";
-  let selectedDisk = null;
-  let slideTimer = null;
-  let pollTimer = null;
+const $ = (sel) => document.querySelector(sel);
 
-  function show(page) {
-    PAGES.forEach((p) => $("page-" + p).classList.remove("active"));
-    $("page-" + page).classList.add("active");
-    current = page;
-    $("step-label").textContent = `Paso ${PERCENT_STEP[page]} de 4`;
-    $("btn-back").disabled = !["disk", "account"].includes(page);
-    const next = $("btn-next");
-    const inWizard = ["lang", "disk", "account"].includes(page);
-    next.classList.toggle("hidden", !inWizard);
-    if (page === "start") $("btn-install-now").classList.remove("hidden");
+const state = {
+  page: 1,
+  disk: null,
+  uefi: false,
+  installing: false,
+};
+
+const els = {
+  steps: [...document.querySelectorAll('.step')],
+  pages: [...document.querySelectorAll('.page')],
+  disks: $('#disks'),
+  firmwareHint: $('#firmware-hint'),
+  confirmErase: $('#confirm-erase'),
+  back: $('#back'),
+  next: $('#next'),
+  install: $('#install'),
+  reboot: $('#reboot'),
+  status: $('#status'),
+  bar: $('#bar'),
+  percent: $('#percent'),
+  message: $('#progress-message'),
+  progressTitle: $('#progress-title'),
+  log: $('#log'),
+  version: $('#version'),
+};
+
+/* ----------------------------- utilidades ------------------------------- */
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}
+
+function setStatus(text) {
+  els.status.textContent = text || '';
+}
+
+function goTo(page) {
+  state.page = page;
+  for (const el of els.pages) {
+    el.classList.toggle('is-active', Number(el.dataset.page) === page);
   }
-
-  function next() {
-    if (current === "lang") return show("start");
-    if (current === "start") return loadDisks();
-    if (current === "disk") {
-      if (!selectedDisk) return;
-      return show("account");
-    }
-    if (current === "account") return startInstall();
+  for (const el of els.steps) {
+    const n = Number(el.dataset.step);
+    el.classList.toggle('is-active', n === page);
+    el.classList.toggle('is-done', n < page);
   }
+  els.back.classList.toggle('is-hidden', page <= 1 || state.installing);
+  els.back.disabled = state.installing;
+  els.next.classList.toggle('is-hidden', page >= 3 || page === 4 || state.installing);
+  els.install.classList.toggle('is-hidden', page !== 3 || state.installing);
+  els.reboot.classList.add('is-hidden');
+  if (page === 2) validateDiskStep();
+  if (page === 3) validateAccountStep();
+}
 
-  function back() {
-    if (current === "disk") return show("start");
-    if (current === "account") return show("disk");
+/* ------------------------------ discos ---------------------------------- */
+async function loadSystem() {
+  try {
+    const res = await fetch('/api/system');
+    const data = await res.json();
+    state.uefi = Boolean(data.uefi);
+    if (data.version) els.version.textContent = `Core OS ${data.version}`;
+    els.firmwareHint.textContent = state.uefi
+      ? 'Arranque UEFI detectado. Se creará una partición de arranque EFI.'
+      : 'Arranque BIOS detectado. Se instalará GRUB en el disco elegido.';
+    renderDisks(data.disks || []);
+  } catch (err) {
+    els.disks.innerHTML = '<p class="muted">No se pudieron leer los discos.</p>';
   }
+}
 
-  async function api(path, body) {
-    const opts = body
-      ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-      : {};
-    const res = await fetch(path, opts);
-    return res.json();
+function renderDisks(disks) {
+  if (!disks.length) {
+    els.disks.innerHTML = '<p class="muted">No se ha encontrado ningún disco.</p>';
+    return;
   }
+  els.disks.innerHTML = disks.map((d) => `
+    <button type="button" class="disk" data-device="${escapeHtml(d.device)}"
+            data-label="${escapeHtml(d.model)} — ${escapeHtml(d.size)}">
+      <svg class="disk__icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M4 5h16a1 1 0 0 1 1 1v7H3V6a1 1 0 0 1 1-1Zm-1 10h18v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4Zm3.5 2.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
+      </svg>
+      <span>
+        <span class="disk__name">${escapeHtml(d.device)}</span>
+        <span class="disk__meta">${escapeHtml(d.model)} · ${escapeHtml(d.size)}${
+          d.rotational ? ' · disco duro' : ' · SSD'}${d.removable ? ' · extraíble' : ''}</span>
+      </span>
+    </button>
+  `).join('');
 
-  async function loadDisks() {
-    const data = await api("/api/disks");
-    const list = $("disk-list");
-    list.innerHTML = "";
-    selectedDisk = null;
-    if (!data.disks.length) {
-      list.innerHTML =
-        '<div class="disk"><div class="info"><span class="name">No se encontraron discos</span>' +
-        '<span class="meta">Conecta un disco y vuelve a intentarlo.</span></div></div>';
-    }
-    data.disks.forEach((d) => {
-      const el = document.createElement("div");
-      el.className = "disk";
-      el.innerHTML =
-        `<span class="radio"></span><div class="info">` +
-        `<span class="name">${d.model || "Disco"} · ${d.device}</span>` +
-        `<span class="meta">${d.size} · ${d.rotational ? "HDD" : "SSD"}</span>` +
-        `</div>`;
-      el.onclick = () => {
-        document.querySelectorAll(".disk").forEach((x) => x.classList.remove("sel"));
-        el.classList.add("sel");
-        selectedDisk = d.device;
-      };
-      list.appendChild(el);
+  for (const btn of els.disks.querySelectorAll('.disk')) {
+    btn.addEventListener('click', () => {
+      state.disk = { device: btn.dataset.device, label: btn.dataset.label };
+      for (const other of els.disks.querySelectorAll('.disk')) {
+        other.classList.toggle('is-selected', other === btn);
+      }
+      validateDiskStep();
     });
-    show("disk");
+  }
+}
+
+function validateDiskStep() {
+  const ok = Boolean(state.disk) && els.confirmErase.checked;
+  els.next.disabled = !ok;
+  if (!state.disk) setStatus('Selecciona el disco donde instalar Core OS.');
+  else if (!els.confirmErase.checked) setStatus('Marca la casilla para confirmar el borrado del disco.');
+  else setStatus(`Se instalará en ${state.disk.device}.`);
+}
+
+/* ------------------------------ cuenta ---------------------------------- */
+function accountValues() {
+  return {
+    locale: $('#locale').value,
+    keymap: $('#keymap').value,
+    timezone: $('#timezone').value,
+    user: $('#user').value.trim(),
+    password: $('#password').value,
+    password2: $('#password2').value,
+    hostname: $('#hostname').value.trim(),
+  };
+}
+
+function validateAccountStep() {
+  const v = accountValues();
+  let error = '';
+  if (!/^[a-z][a-z0-9_-]{1,31}$/.test(v.user)) {
+    error = 'El usuario debe empezar por letra y usar solo minúsculas, números, «-» o «_».';
+  } else if (v.password.length < 1) {
+    error = 'Escribe una contraseña.';
+  } else if (v.password !== v.password2) {
+    error = 'Las contraseñas no coinciden.';
+  } else if (!/^[a-zA-Z0-9-]{1,63}$/.test(v.hostname)) {
+    error = 'El nombre del equipo solo admite letras, números y «-».';
+  }
+  els.install.disabled = Boolean(error);
+  setStatus(error);
+  return !error;
+}
+
+/* ---------------------------- instalación ------------------------------- */
+async function startInstall() {
+  if (!validateAccountStep()) return;
+  const v = accountValues();
+  state.installing = true;
+  goTo(4);
+  els.progressTitle.textContent = 'Instalando Core OS…';
+  els.message.textContent = 'Preparando…';
+  els.log.textContent = '';
+
+  await fetch('/api/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      disk: state.disk.device,
+      locale: v.locale,
+      keymap: v.keymap,
+      timezone: v.timezone,
+      user: v.user,
+      password: v.password,
+      hostname: v.hostname,
+    }),
+  });
+
+  poll();
+}
+
+async function poll() {
+  let data;
+  try {
+    data = await (await fetch('/api/progress')).json();
+  } catch (err) {
+    setTimeout(poll, 1500);
+    return;
   }
 
-  async function startInstall() {
-    const payload = {
-      disk: selectedDisk,
-      user: $("user").value,
-      password: $("password").value,
-      hostname: $("hostname").value,
-      lang: $("lang").value,
-      layout: $("layout").value,
-      timezone: $("timezone").value,
-    };
-    if (!payload.disk) {
-      alert("Selecciona un disco.");
-      return show("disk");
-    }
-    show("progress");
-    startSlides();
-    await api("/api/install", payload);
-    poll();
+  els.bar.style.width = `${data.percent || 0}%`;
+  els.percent.textContent = `${data.percent || 0} %`;
+  els.message.textContent = data.message || '';
+  if (Array.isArray(data.log)) {
+    els.log.textContent = data.log.join('\n');
+    els.log.scrollTop = els.log.scrollHeight;
   }
 
-  function startSlides() {
-    let i = 0;
-    $("slide").textContent = slides[0];
-    slideTimer = setInterval(() => {
-      i = (i + 1) % slides.length;
-      $("slide").textContent = slides[i];
-    }, 4500);
+  if (data.error) {
+    els.progressTitle.textContent = 'La instalación ha fallado';
+    els.message.textContent = data.error;
+    state.installing = false;
+    els.reboot.classList.remove('is-hidden');
+    return;
   }
 
-  function poll() {
-    clearInterval(pollTimer);
-    pollTimer = setInterval(async () => {
-      const s = await api("/api/progress");
-      $("prog-bar").style.width = s.percent + "%";
-      $("prog-pct").textContent = s.percent + "%";
-      $("prog-msg").textContent = s.message || "";
-      $("log").textContent = (s.log || []).join("\n");
-      $("log").scrollTop = $("log").scrollHeight;
-      if (s.error) {
-        clearInterval(pollTimer);
-        clearInterval(slideTimer);
-        $("err-msg").textContent = s.error;
-        $("err-log").textContent = (s.log || []).join("\n");
-        return show("error");
-      }
-      if (s.done) {
-        clearInterval(pollTimer);
-        clearInterval(slideTimer);
-        return show("done");
-      }
-    }, 900);
+  if (data.done) {
+    els.progressTitle.textContent = 'Core OS está instalado';
+    els.message.textContent = 'Retira el medio de instalación y reinicia para empezar a usar Core OS.';
+    els.bar.style.width = '100%';
+    els.percent.textContent = '100 %';
+    state.installing = false;
+    els.reboot.classList.remove('is-hidden');
+    return;
   }
 
-  $("btn-next").onclick = next;
-  $("btn-back").onclick = back;
-  $("btn-install-now").onclick = () => loadDisks();
-  $("btn-reboot").onclick = () => api("/api/reboot", {});
+  setTimeout(poll, 1000);
+}
 
-  show("lang");
-})();
+/* ------------------------------- eventos -------------------------------- */
+els.next.addEventListener('click', () => {
+  if (state.page === 1) return goTo(2);
+  if (state.page === 2 && validateDiskStep()) return goTo(3);
+});
+
+els.back.addEventListener('click', () => {
+  if (state.page > 1) goTo(state.page - 1);
+});
+
+els.install.addEventListener('click', startInstall);
+
+els.reboot.addEventListener('click', async () => {
+  els.reboot.disabled = true;
+  setStatus('Reiniciando…');
+  try { await fetch('/api/reboot', { method: 'POST' }); } catch (err) { /* ignora */ }
+});
+
+els.confirmErase.addEventListener('change', validateDiskStep);
+
+for (const id of ['#user', '#password', '#password2', '#hostname']) {
+  $(id).addEventListener('input', validateAccountStep);
+}
+
+goTo(1);
+loadSystem();

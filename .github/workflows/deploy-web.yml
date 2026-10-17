@@ -1,54 +1,46 @@
-name: Deploy Web Demo (Vercel)
+name: Deploy Panel (Render)
 
+# Render despliega automáticamente al recibir el push, así que este flujo es
+# opcional: sirve para forzar un despliegue manual usando el "Deploy Hook" del
+# servicio (secreto RENDER_DEPLOY_HOOK). Si el secreto no existe, no hace nada.
 on:
   push:
     branches: [main]
     paths:
       - 'web-demo/**'
-      - 'vercel.json'
+      - 'render.yaml'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-web-${{ github.ref }}
+  group: deploy-panel-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Los secretos no se pueden usar en un `if` a nivel de job, así que los
-  # detectamos en un step y exponemos el resultado como output.
-  check-secrets:
-    runs-on: ubuntu-24.04
-    outputs:
-      has_vercel: ${{ steps.check.outputs.has_vercel }}
-    steps:
-      - id: check
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          if [ -n "$VERCEL_TOKEN" ]; then
-            echo "has_vercel=true"  >> "$GITHUB_OUTPUT"
-          else
-            echo "has_vercel=false" >> "$GITHUB_OUTPUT"
-          fi
-
   deploy:
     runs-on: ubuntu-24.04
-    needs: check-secrets
-    if: needs.check-secrets.outputs.has_vercel == 'true'
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: web-demo/package-lock.json
 
-      - name: Desplegar en Vercel (producción)
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Comprobar el panel antes de desplegar
+        working-directory: web-demo
         run: |
-          npm i -g vercel@latest
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          vercel build --prod --token="$VERCEL_TOKEN"
-          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          npm install --no-audit --no-fund
+          npm run check
+
+      - name: Lanzar el despliegue en Render
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          if [ -z "${RENDER_DEPLOY_HOOK:-}" ]; then
+            echo "No hay RENDER_DEPLOY_HOOK: Render desplegará el push por su cuenta."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK" && echo "Despliegue lanzado."

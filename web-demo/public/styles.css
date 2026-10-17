@@ -24,7 +24,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', 'Ubuntu', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', 'Cantarell', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
 }
 

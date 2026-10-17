@@ -1,0 +1,7 @@
+# ===========================================================================
+#  Core OS — perfil de dconf del sistema.
+#  Hace que los ajustes de /etc/dconf/db/local.d/ se apliquen a todos los
+#  usuarios (y que tengan prioridad sobre los ajustes de usuario).
+# ===========================================================================
+user-db:user
+system-db:local

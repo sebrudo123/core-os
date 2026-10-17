@@ -1,126 +1,104 @@
 # Arquitectura de Core OS
 
-## Visión general
+Core OS es un sistema operativo propio construido **desde Arch Linux**. No es
+una capa encima de otra distribución: la ISO se compone con `pacstrap` +
+`archiso`, así que todo lo que hay dentro está elegido y configurado aquí.
 
-```text
-                ┌──────────────────────────────────────────────┐
-                │                  GitHub                       │
-                │  push a main ──► Actions (build-iso.yml)      │
-                │                    │                          │
-                │                    ├─ validate (shellcheck)   │
-                │                    ├─ package (tarball)       │
-                │                    └─ build-iso ──► .iso      │
-                └──────────────────────────────────────────────┘
-                                    │
-             customization/         │            web-demo/
-        (se empaqueta en la ISO)    │     (panel de administración)
-                                    ▼            │
-                          ┌──────────────┐       │  Vercel  → vista previa pública (demo)
-                          │  Core OS ISO │       ├─►
-                          │  Ubuntu base │       │  Render  → vista previa con métricas reales
-                          └──────┬───────┘       └─►
-                                 │ instalación
-                                 ▼
-                     ┌────────────────────────────┐
-                     │  Core OS instalado          │
-                     │  └─ core-os-web-demo.service│  ← MISMO panel, métricas reales
-                     │     http://<host>:8080      │     (DEMO_MODE=false)
-                     └────────────────────────────┘
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Repositorio (GitHub: sebrudo123/core-os)                                │
+│                                                                          │
+│   web-demo/               panel de administración (Node + Express)       │
+│   customization/archiso/  perfil de archiso (paquetes, arranque, dconf)  │
+│   customization/arch/     scripts de personalización (se ejecutan en el  │
+│                           chroot durante la construcción)                │
+│   customization/setup/    asistente de instalación (interfaz + backend)  │
+│   customization/branding/ logotipos, fondos y tema de arranque            │
+│                                                                          │
+│   .github/workflows/      CI: validar → construir ISO → publicar Release │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-> El panel es **el mismo código** en los tres entornos. `45-web-demo.sh` lo
-> instala dentro del SO (Node.js + systemd, puerto 8080); Vercel y Render solo
-> sirven la misma app como vista previa para administradores.
+## 1. Cómo se construye la ISO
 
-## Componentes
+1. **`customization/arch/stage.sh`** copia al perfil de archiso todo lo que
+   necesita el medio en vivo (panel, asistente, marca, scripts y unidades de
+   systemd) dentro de `archiso/airootfs/opt/core-os/`.
+2. **`mkarchiso`** (el constructor oficial de Arch) hace el trabajo:
+   - instala con `pacstrap` los paquetes de `packages.x86_64` (base, kernel,
+     GNOME, Firefox, Node…),
+   - copia `archiso/airootfs/` encima del sistema recién instalado,
+   - ejecuta `airootfs/root/customize_airootfs.sh` dentro del chroot, que
+     encadena nuestros scripts `customization/arch/scripts/NN-*.sh`,
+   - borra `/boot` (el kernel va a la ISO), limpia la caché de pacman y genera
+     el `squashfs` comprimido con xz,
+   - monta el arranque: **syslinux** para BIOS y **GRUB** (con nuestro tema)
+     para UEFI.
+3. El resultado es `customization/out/core-os-<versión>-x86_64.iso`.
 
-### 1. Personalización (`customization/`)
+Los scripts se ejecutan **en orden numérico**, y cada uno hace una sola cosa:
 
-- **Fuente de verdad** de todo lo que se instala y configura.
-- Scripts numerados que se ejecutan dentro de un `chroot` (mismo resultado en
-  Cubic o en `build-iso.sh`).
-- Listas declarativas de paquetes (`packages.list` / `remove.list`).
-- `build-iso.sh` orquesta: descarga → extrae → chroot → repaqueta.
+| Script | Responsabilidad |
+|---|---|
+| `00-pre.sh` | idioma, teclado, zona horaria, `pacman.conf`, estructura de `/etc/core-os` |
+| `10-desktop.sh` | GNOME con aspecto Windows 11: `dash-to-panel`, `arc-menu`, iconos, tema oscuro, `dconf update` |
+| `20-branding.sh` | `/etc/os-release`, nombre del equipo, logotipos, fondos, tema de GRUB |
+| `30-live-user.sh` | usuario `core` (UID 1000), sudo sin contraseña e inicio de sesión automático |
+| `40-services.sh` | GDM, NetworkManager, Bluetooth, CUPS, PipeWire y servicios de Core OS |
+| `45-web-demo.sh` | panel de administración como servicio en el puerto 8080 |
+| `50-installer.sh` | asistente de instalación (interfaz WebKit + servicio root) |
+| `60-flatpak.sh` | repositorio Flathub |
+| `99-cleanup.sh` | cachés, registros y `/etc/machine-id` |
 
-Flujo interno de `build-iso.sh`:
+## 2. El medio en vivo
 
-```text
- ISO base ──xorriso extract──► work/iso
-                                   │
-                                   ├─ casper/filesystem.squashfs
-                                   │        │ unsquashfs
-                                   │        ▼
-                                   │     work/edit  ◄── rsync customization → /opt/core-os
-                                   │        │
-                                   │        ├─ bind /proc /sys /dev /run
-                                   │        ├─ chroot: scripts/00..99
-                                   │        └─ mksquashfs → filesystem.squashfs
-                                   │
-                                   └─ xorriso mkisofs ──► out/core-os-<v>-amd64.iso
-```
+- Arranca **directamente en el escritorio**: el usuario `core` entra solo
+  (autologin de GDM). No hay pantalla de inicio de sesión ni consola de root.
+- El usuario `core` tiene `sudo` sin contraseña (es un medio efímero, pensado
+  para probar e instalar).
+- La raíz es un `squashfs` de solo lectura con una capa de escritura en RAM:
+  nada de lo que se haga en la sesión en vivo toca el disco.
+- El instalador se abre automáticamente a los pocos segundos.
 
-### 2. Modo Demo Web (`web-demo/`)
+## 3. El instalador (estilo Windows 11)
 
-Aplicación **Node.js + Express** con una SPA de un solo archivo (sin framework)
-para minimizar dependencias y facilitar el despliegue.
+- **Interfaz** (`customization/setup/ui/`): asistente HTML/CSS/JS de cuatro
+  pasos (idioma → disco → cuenta → instalación) mostrado a pantalla completa
+  con WebKit2GTK.
+- **Backend** (`customization/setup/core-os-setup.py`): servicio root que
+  expone una API en `127.0.0.1:8765` y hace la instalación **real**:
+  `sgdisk` para particionar, `mkfs`, `rsync` del sistema, `genfstab`,
+  `mkinitcpio -P`, `grub-install` + `grub-mkconfig` y creación de la cuenta.
+- Solo se muestra en el medio en vivo (`/run/archiso`); el instalador borra
+  además todos los restos del medio en vivo (usuario `core`, autologin,
+  servicios del ISO, ganchos de pacman) del sistema instalado.
 
-Forma parte de la ISO: `scripts/45-web-demo.sh` instala Node.js, copia la app a
-`/usr/lib/core-os/web-demo`, crea `/etc/core-os/web-demo.env` y habilita el
-servicio `core-os-web-demo.service` (puerto 8080). Así, el panel que se ve en la
-web y el que se ejecuta en el sistema instalado son **exactamente el mismo**.
+## 4. El panel de administración
 
-```text
-public/ (SPA: index.html, styles.css, app.js)
-   │ fetch /api/*
-   ▼
-src/app.js ──► src/routes/*  ──► src/services/*
-     (Express)      │                 ├── system.js   (métricas / estado)
-                    │                 ├── builds.js   (historial)
-                    │                 ├── github.js   (GitHub Actions)
-                    │                 ├── logs.js     (lectura de logs)
-                    │                 └── terminal.js (lista blanca)
-```
+`web-demo/` es una aplicación Node/Express sin base de datos:
 
-Dos modos de operación:
+- En la **web** (Render) se ejecuta con `DEMO_MODE=true`.
+- Dentro de **Core OS** se instala como servicio `core-os-web-demo.service`
+  con `DEMO_MODE=false`, de modo que muestra las métricas reales del equipo en
+  `http://localhost:8080`.
 
-| Modo | `DEMO_MODE` | Datos | Dónde encaja |
-| --- | --- | --- | --- |
-| Demo | `true` | Simulados (deterministas) | Vercel, demos, portafolio |
-| Real | `false` | Del host vía `systeminformation` | Render, VPS, propio Core OS |
+Ambos son el mismo código: lo que se ve en la web es lo que se ve instalado.
 
-### 3. Endpoints de la API
+## 5. Integración continua
 
-| Método | Ruta | Descripción |
-| --- | --- | --- |
-| GET | `/api/health` | Estado básico del servicio |
-| GET | `/api/config` | Configuración pública (sin secretos) |
-| GET | `/api/status` | Identidad del SO, servicios, roadmap |
-| GET | `/api/metrics` | CPU, memoria, disco, red, uptime |
-| GET | `/api/metrics/stream` | Métricas en vivo (SSE) |
-| GET | `/api/builds` | Historial + estadísticas |
-| GET | `/api/builds/:id` | Detalle de una build |
-| GET | `/api/builds/:id/logs` | Log de una build |
-| GET | `/api/logs` | Lista de archivos de log |
-| GET | `/api/logs/:name` | Contenido de un log |
-| GET | `/api/terminal/commands` | Comandos permitidos |
-| POST | `/api/terminal` | Ejecuta un comando (lista blanca) |
+| Flujo | Qué hace |
+|---|---|
+| `ci.yml` | `shellcheck` + sintaxis de bash, comprobación del asistente y prueba de humo del panel |
+| `build-iso.yml` | valida, construye la ISO dentro de un contenedor `archlinux:latest` y, en los tags `v*`, publica la Release (ISO o partes de <2 GB + sumas SHA-256) |
+| `live-preview.yml` | arranca la ISO en QEMU/KVM, la publica por noVNC con un túnel y guarda capturas del escritorio |
+| `deploy-web.yml` | comprueba el panel y lanza el despliegue en Render |
 
-## Decisiones de diseño
+## 6. Prueba del sistema sin instalarlo
 
-- **Cubic vs scripts**: Cubic (GUI) para prototipar; `build-iso.sh` (headless)
-  para CI/CD. Ambos aplican los mismos scripts → una sola fuente de verdad.
-- **Sin shell en la terminal web**: se usa `execFile` con lista blanca, sin
-  interpretación de shell, para eliminar inyección de comandos.
-- **Sin base de datos**: el historial vive en `data/builds.json` y se fusiona con
-  la API de GitHub Actions. Menos infraestructura, más portabilidad.
-- **Un solo artefacto para Vercel y Render**: `src/app.js` se exporta tanto al
-  servidor clásico como al handler serverless.
+`live-preview.yml` arranca la **ISO real** en una máquina virtual y la expone en
+el navegador: se puede usar el ratón, el teclado y ver el escritorio de verdad.
+En cada ejecución publica:
 
-## Seguridad (estado actual y pendientes)
-
-- [x] Terminal con lista blanca y sin shell.
-- [x] Path traversal bloqueado en la lectura de logs.
-- [x] Secretos sólo por variables de entorno (`.env` ignorado por git).
-- [ ] Autenticación del panel admin (OIDC / JWT) — roadmap.
-- [ ] Rate limiting y CSRF — roadmap.
-- [ ] Firma GPG de la ISO — roadmap.
+- `<túnel>/vnc.html?autoconnect=1` — escritorio interactivo,
+- `<túnel>/shots/latest.png` — última captura de pantalla,
+- `<túnel>/shots/serial.log` — registro de la consola serie (diagnóstico).

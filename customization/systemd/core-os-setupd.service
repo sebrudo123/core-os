@@ -1,23 +1,28 @@
 # ===========================================================================
-#  core-os-setupd.service — Servicio del asistente de instalación de Core OS.
-#  Expone la API local de instalación (127.0.0.1:8765) y se ejecuta como root
-#  para poder particionar y copiar el sistema.
+#  core-os-setupd.service — Servicio de instalación de Core OS.
 #
-#  Solo actúa en el MEDIO de instalación (live). En el sistema instalado el
-#  ExecStart detecta que no es un medio en vivo y termina sin hacer nada.
+#  Expone la API local del asistente (127.0.0.1:8765) y hace la instalación
+#  REAL en el disco. Se ejecuta como root porque necesita particionar.
+#
+#  Solo actúa en el MEDIO EN VIVO: archiso crea /run/archiso al arrancar desde
+#  la ISO. En el sistema instalado ese directorio no existe y el servicio no
+#  hace nada (queda inerte, pero deshabilitado además por el instalador).
 # ===========================================================================
 [Unit]
-Description=Core OS Setup (servicio de instalación)
+Description=Core OS Setup (asistente de instalación)
 After=network.target
 Wants=network.target
+ConditionPathExists=/run/archiso
+ConditionPathExists=/usr/lib/core-os/setup/core-os-setup.py
 
 [Service]
 Type=simple
-# La raíz del medio en vivo es overlayfs (squashfs + overlay) y/o existe
-# /cdrom. En el sistema instalado, no.
-ExecStart=/bin/sh -c "if findmnt -n -o FSTYPE / 2>/dev/null | grep -q overlay || [ -d /cdrom ]; then exec /usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --server-only; else echo 'Core OS Setup: no es el medio en vivo'; fi"
+ExecStart=/usr/bin/python3 /usr/lib/core-os/setup/core-os-setup.py --server-only
 Restart=on-failure
 RestartSec=2
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=core-os-setupd
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,105 @@
+# ===========================================================================
+#  Core OS — ajustes de escritorio (dconf del sistema)
+#
+#  Se aplican a TODOS los usuarios con `dconf update` (lo hace
+#  customization/arch/scripts/10-desktop.sh, que además añade aquí la lista de
+#  extensiones de GNOME detectadas en el sistema).
+# ===========================================================================
+
+# --- Aspecto general -------------------------------------------------------
+[org/gnome/desktop/interface]
+color-scheme='prefer-dark'
+gtk-theme='Adwaita-dark'
+icon-theme='Papirus-Dark'
+cursor-theme='Adwaita'
+font-name='Cantarell 11'
+document-font-name='Cantarell 11'
+monospace-font-name='Monospace 11'
+clock-show-weekday=true
+clock-show-seconds=false
+show-battery-percentage=true
+enable-hot-corners=false
+
+# --- Fondo de pantalla de Core OS -----------------------------------------
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/backgrounds/core-os/core-os-default.svg'
+picture-uri-dark='file:///usr/share/backgrounds/core-os/core-os-default.svg'
+picture-options='zoom'
+primary-color='#0B1220'
+secondary-color='#13203B'
+
+[org/gnome/desktop/screensaver]
+picture-uri='file:///usr/share/backgrounds/core-os/core-os-default.svg'
+primary-color='#0B1220'
+color-shading-type='solid'
+
+# --- Botones de ventana y tipografía de las barras de título --------------
+[org/gnome/desktop/wm/preferences]
+button-layout=':minimize,maximize,close'
+theme='Adwaita-dark'
+titlebar-font='Cantarell Bold 11'
+num-workspaces=1
+
+[org/gnome/mutter]
+experimental-features=['scale-monitor-framebuffer']
+
+# --- Energía: en una máquina de escritorio no se suspende ------------------
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+
+# --- Escritorio limpio (sin iconos de la papelera ni de la carpeta personal)
+[org/gnome/shell/extensions/ding]
+show-home=false
+show-trash=false
+show-volumes=false
+
+# --- Barra de tareas estilo Windows 11 (dash-to-panel) --------------------
+[org/gnome/shell/extensions/dash-to-panel]
+panel-position='BOTTOM'
+panel-size=44
+panel-anchors=''
+taskbar-position='CENTERED'
+group-apps=true
+show-apps-icon-side='END'
+show-favorites=true
+show-running-apps=true
+show-window-buttons='never'
+window-preview=true
+window-preview-show-title=true
+appicon-margin=6
+appicon-padding=4
+dot-position='BOTTOM'
+dot-size=4
+status-icon-padding-factor=1
+trans-use-custom-opacity=true
+trans-panel-opacity=0.92
+trans-use-custom-gradient=false
+trans-use-dynamic-opacity=false
+hot-keys=false
+intellihide=false
+animate-appicon-hover=true
+animate-appicon-hover-animation-extent='{ "RIPPLE": 4 }'
+tray-padding=4
+secondarymenu=false
+panel-positions='{"*": "BOTTOM"}'
+panel-sizes='{"*": 44}'
+
+# --- Menú de aplicaciones estilo Windows (arc-menu) -----------------------
+[org/gnome/shell/extensions/arcmenu]
+menu-layout='Windows'
+menu-button-icon='Distro_Icon'
+distro-icon=0
+position-in-panel='panel'
+menu-button-appearance='Icon'
+menu-background-color='#1b2437'
+menu-foreground-color='#dbe4f5'
+menu-separator-color='#2f3d5c'
+active-menu-item-color='#38bdf8'
+disable-recently-installed-apps=false
+show-apps-categories=true
+
+# --- Bandeja del sistema (iconos de aplicaciones) -------------------------
+[org/gnome/shell/extensions/appindicator]
+icon-size=16
+tray-pos='right'
+legacy-tray-enabled=false

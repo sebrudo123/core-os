@@ -1,0 +1,157 @@
+# ===========================================================================
+#  Core OS — paquetes del medio en vivo (y, por copia, del sistema instalado).
+#
+#  Se instalan con pacstrap desde los repositorios OFICIALES de Arch Linux.
+#  Nada de AUR: la ISO debe poder construirse sin ayudantes externos.
+# ===========================================================================
+
+# --- Base del sistema ------------------------------------------------------
+base
+linux
+linux-firmware
+linux-firmware-marvell
+mkinitcpio
+mkinitcpio-archiso
+amd-ucode
+intel-ucode
+archlinux-keyring
+systemd-sysvcompat
+sudo
+bash
+acl
+attr
+which
+
+# --- Utilidades ------------------------------------------------------------
+nano
+vim
+less
+man-db
+man-pages
+bash-completion
+htop
+fastfetch
+git
+curl
+wget
+unzip
+zip
+jq
+rsync
+tree
+
+# --- Red -------------------------------------------------------------------
+networkmanager
+network-manager-applet
+iw
+wpa_supplicant
+wireless-regdb
+dhcpcd
+openssh
+nmap
+traceroute
+
+# --- Discos y sistemas de archivos ----------------------------------------
+parted
+gptfdisk
+dosfstools
+mtools
+e2fsprogs
+exfatprogs
+ntfs-3g
+btrfs-progs
+xfsprogs
+f2fs-tools
+cryptsetup
+lvm2
+squashfs-tools
+arch-install-scripts
+
+# --- Arranque --------------------------------------------------------------
+grub
+efibootmgr
+efivar
+os-prober
+syslinux
+
+# --- Escritorio GNOME ------------------------------------------------------
+gnome
+gdm
+gnome-tweaks
+gnome-themes-extra
+adwaita-icon-theme
+gnome-backgrounds
+papirus-icon-theme
+gnome-shell-extensions
+gnome-shell-extension-appindicator
+gnome-shell-extension-desktop-icons-ng
+gnome-shell-extension-dash-to-panel
+gnome-shell-extension-arc-menu
+gnome-shell-extension-caffeine
+xdg-user-dirs
+xdg-utils
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+gnome-keyring
+gnome-text-editor
+gnome-system-monitor
+gnome-disk-utility
+nautilus
+gnome-terminal
+gnome-control-center
+polkit-gnome
+
+# --- Gráficos, vídeo y sonido ---------------------------------------------
+mesa
+vulkan-intel
+vulkan-radeon
+xorg-server
+xorg-xwayland
+pipewire
+pipewire-alsa
+pipewire-pulse
+wireplumber
+alsa-utils
+sof-firmware
+
+# --- Bluetooth e impresión -------------------------------------------------
+bluez
+bluez-utils
+cups
+cups-pk-helper
+
+# --- Aplicaciones ----------------------------------------------------------
+firefox
+flatpak
+
+# --- Tipografías -----------------------------------------------------------
+ttf-dejavu
+ttf-liberation
+noto-fonts
+noto-fonts-emoji
+cantarell-fonts
+
+# --- Instalador de Core OS (UI WebKit2GTK + backend Python) ----------------
+python
+python-gobject
+gtk3
+webkit2gtk-4.1
+
+# --- Panel web de Core OS (Node) ------------------------------------------
+nodejs
+npm
+
+# --- Invitados de virtualización (para probar en QEMU/VirtualBox/VMware) ---
+qemu-guest-agent
+spice-vdagent
+open-vm-tools
+virtualbox-guest-utils-nox
+
+# --- Varios ----------------------------------------------------------------
+reflector
+pacman-contrib
+dialog
+usbutils
+pciutils
+dmidecode
+iproute2

@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Verifica los scripts de personalización
+  # Scripts de personalización y perfil de archiso
   # ---------------------------------------------------------------------------
-  shell:
+  scripts:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -22,14 +22,23 @@ jobs:
       - name: Instalar shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
-      - name: Analizar scripts
-        run: shellcheck -x -S warning customization/scripts/*.sh customization/build-iso.sh
+      - name: shellcheck
+        run: |
+          shellcheck -x -S warning \
+            customization/arch/scripts/*.sh \
+            customization/arch/scripts/lib/*.sh \
+            customization/arch/*.sh \
+            customization/archiso/airootfs/root/customize_airootfs.sh \
+            customization/archiso/profiledef.sh
 
-      - name: Comprobar sintaxis bash
-        run: for f in customization/scripts/*.sh customization/build-iso.sh; do bash -n "$f"; done
+      - name: Validar el perfil, los archivos y el asistente
+        run: |
+          bash customization/arch/check.sh
+          python3 -m py_compile customization/setup/core-os-setup.py
+          echo "asistente: correcto"
 
   # ---------------------------------------------------------------------------
-  # Verifica el Modo Demo Web (build + smoke test de la API)
+  # Panel de administración (web-demo)
   # ---------------------------------------------------------------------------
   web-demo:
     runs-on: ubuntu-24.04
@@ -51,12 +60,12 @@ jobs:
       - name: Comprobación de sintaxis
         run: npm run check
 
-      - name: Smoke test de la API
+      - name: Prueba de humo de la API
         run: |
           node server.js &
           SERVER_PID=$!
           sleep 3
           curl -fsS http://localhost:3000/api/health
-          curl -fsS http://localhost:3000/api/status   | head -c 400
-          curl -fsS http://localhost:3000/api/metrics  | head -c 400
+          curl -fsS http://localhost:3000/api/status  | head -c 400
+          curl -fsS http://localhost:3000/api/metrics | head -c 400
           kill "$SERVER_PID"
